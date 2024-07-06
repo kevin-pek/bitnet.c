@@ -58,7 +58,7 @@ gcc -o infer infer.c -DDEBUG
     - [x] Token embedding layer
     - [x] RMSNorm layer
     - [ ] BitLinear layer
-        - [ ] Bit matrix multiplications
+        - [x] Bit matrix multiplications
         - [x] GELU activation
         - [x] Weight and activation quantisation/dequantisation functions
     - [ ] Grouped query attention
