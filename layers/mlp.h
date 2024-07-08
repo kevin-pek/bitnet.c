@@ -9,35 +9,46 @@
 typedef struct {
     float* x;     // input to bitlinear layer
     float* g;     // rmsnorm scaling weights
-    float* w;     // weight matrix
-    float* y_rms; // output of rmsnorm layer
+    float* w;     // bitlinear weight matrix
+    float* rms;   // output of rmsnorm layer
+    float* gelu;  // output of gelu activation
     float* dg;
     float* dw;
-    int d;
-    int h;
-    int b;
+    int d;        // input dimension
+    int h;        // hidden dimension
+    int o;        // output dimension
+    int b;        // batch size
 } bitmlp_t;
 
-bitmlp_t* mlp_init(int d, int h, int b) {
-    bitmlp_t* dbit = (bitmlp_t*) malloc(sizeof(bitmlp_t));
-    dbit->d = d;
-    dbit->h = h;
-    dbit->b = b;
+/// @brief Initialise BitMLP weights with given dimensions.
+/// @param d input dimension
+/// @param h hidden dimension
+/// @param o output dimension
+/// @param b batch size
+void mlp_init(bitmlp_t* mlp, int d, int h, int o, int b) {
+    mlp->d = d;
+    mlp->h = h;
+    mlp->o = o;
+    mlp->b = b;
     size_t elems = b * (2 * d * h + d * 4);
     float* arr = (float*) malloc(sizeof(float) * elems);
+    if (arr == NULL) {
+        fprintf(stderr, "Error allocating memory for MLP!");
+        return;
+    }
+
     float* arr_ptr = arr;
-    dbit->x = arr_ptr;
+    mlp->x = arr_ptr;
     arr_ptr += d * b;
-    dbit->g = arr_ptr;
+    mlp->g = arr_ptr;
     arr_ptr += d * b;
-    dbit->w = arr_ptr;
+    mlp->w = arr_ptr;
     arr_ptr += d * h * b;
-    dbit->y_rms = arr_ptr;
+    mlp->y_rms = arr_ptr;
     arr_ptr += d * b;
-    dbit->dg = arr_ptr;
+    mlp->dg = arr_ptr;
     arr_ptr += d * b;
-    dbit->dw = arr_ptr;
-    return dbit;
+    mlp->dw = arr_ptr;
 }
 
 
@@ -54,24 +65,25 @@ bitmlp_t* mlp_init(int d, int h, int b) {
 /// @param g2 scaling factors for rmsnorm of second bitlinear layer
 /// @param d    input dimensions
 /// @param h    hidden dimension
+/// @param o    output dimension
+/// @param b    batch size
 void mlp_fwd(float* y, float* gelu, float* rms1, float* rms2, float* x2,
              const float* x1, const float* w1, const float* w2, const float* g1, const float* g2,
-             int d, int h) {
+             int d, int h, int o, int b) {
     bitlinear_fwd(gelu, rms1, x1, w1, g1, d, h);
     gelu_fwd(x2, gelu, h);
-    bitlinear_fwd(y, rms2, x2, w2, g2, h, d);
+    bitlinear_fwd(y, rms2, x2, w2, g2, h, o);
 }
 
 
-void mlp_bkwd(float* dx1, float* dx2, float* dw1, float* dw2, float* dg1, float* dg2,
-              float* dy,
+void mlp_bkwd(float* dy, float* dw1, float* dw2, float* dg1, float* dg2,
               const float* x2, const float* w2, const float* g2, const float* rms2,
               const float* gelu,
               const float* x1, const float* w1, const float* g1, const float* rms1,
               int d, int h) {
-    bitlinear_bkwd(dx2, dw2, dg2, dy, x2, w2, g2, rms2, h, d);
-    gelu_bkwd(dy, dx2, gelu, h);
-    bitlinear_bkwd(dx1, dw1, dg1, dy, x1, w1, g1, rms1, d, h);
+    bitlinear_bkwd(dy, dw2, dg2, dy, x2, w2, g2, rms2, h, d);
+    gelu_bkwd(dy, dy, gelu, h);
+    bitlinear_bkwd(dy, dw1, dg1, dy, x1, w1, g1, rms1, d, h);
 }
 
 #endif
