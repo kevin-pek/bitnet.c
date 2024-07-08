@@ -47,6 +47,17 @@ gcc -o infer infer.c -DDEBUG
 
 ## Roadmap
 
+- BitLinear implementation
+    - [x] RMSNorm layer
+    - [x] BitLinear layer
+        - [x] Bit matrix multiplications
+        - [x] GELU activation
+        - [x] Weight and activation quantisation/dequantisation functions
+    - [x] BitLinear MLP Block
+    - [x] Cross entropy loss implementation
+    - [ ] Training weight initialisation and allocation
+    - [ ] AdamW optimiser implementation
+    - [ ] Training loop on MNIST dataset for BitMLP
 - Tokenizer implementation
     - [x] Loading tokenizer from file
     - [x] Base64 decoding
@@ -54,23 +65,15 @@ gcc -o infer infer.c -DDEBUG
     - [x] PriorityQueue implementation
     - [x] Encode text to input ids using tokenizer
     - [x] Decode input ids to text using tokenizer
-- Training loop implementation
+- BitNet transformer implementation
     - [x] Token embedding layer
-    - [x] RMSNorm layer
-    - [ ] BitLinear layer
-        - [x] Bit matrix multiplications
-        - [x] GELU activation
-        - [x] Weight and activation quantisation/dequantisation functions
-    - [ ] Grouped query attention
+    - [ ] Grouped query attention block
         - [ ] KV Cache
         - [ ] Contextual position embeddings
         - [ ] MLP Block
     - [ ] Forward and backward pass for BitNet architecture
-    - [ ] Training weight initialisation and allocation
     - [ ] Dataloader implementation
-    - [ ] AdamW optimiser implementation
-    - [ ] Cross entropy loss implementation
-    - [ ] Saving model weights and checkpointing
+    - [ ] Model checkpointing and training monitoring
     - [ ] Training loop program
 - Inference implementation
     - [ ] Loading saved model weights

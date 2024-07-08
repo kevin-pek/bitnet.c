@@ -5,7 +5,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
+#ifdef OMP
+#include <omp.h>
+#endif
 
 #define PI 3.1415927f // max precision of π for 32 bit floating point numbers
 
@@ -40,6 +44,7 @@ static inline float std_norm() {
 /// @param m input dims, number of cols in weight matrix, rows in x
 /// @param b batch size, num cols in matrix x
 void matmul_fwd(float* y, const float* x, const float* w, int n, int m, int b) {
+    #pragma omp parallel for
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < b; j++) {
             float* y_ij = y + i * b + j;
@@ -63,6 +68,7 @@ void matmul_fwd(float* y, const float* x, const float* w, int n, int m, int b) {
 /// @param b  batch size, num cols in matrix x
 void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
                    int n, int m, int b) {
+    #pragma omp parallel for
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < b; j++) {
             #ifdef DEBUG
@@ -106,22 +112,26 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
 void matmul_bkwd(float* dw, float* dx,
                  const float* dy, const float* w, const float* x,
                  int n, int m, int b) {
-    // compute dw
-    for (int i = 0; i < n; i++)
-        for (int j = 0; j < m; j++)
-            dw[i * m + j] = dy[i] * x[j];
+    memset(dx, 0, m * b * sizeof(float));
+    memset(dw, 0, n * m * sizeof(float));
 
-    for (int j = 0; j < m; j++) dx[j] = 0.0f; // initialize dx to 0
-
-    // compute dx
-    for (int k = 0; k < n; k++)
-        for (int j = 0; j < m; j++)
-            dx[j] += dy[k] * w[k * m + j];
+    #pragma omp parallel for
+    for (int i = 0; i < n; i++) {
+        for (int k = 0; k < m; k++) {
+            for (int j = 0; j < b; j++) {
+                // dw_ik = sum(dL / dy_ij * dx_kj), j in [1, b]
+                dw[i * m + k] += dy[i * b + j] * x[k * b + j];
+                // dx_kj = sum(dL / dy_ij * dy_ij / dx_ij), j in [1, b]
+                dx[k * b + j] += w[i * m + k] * dy[i * b + j];
+            }
+        }
+    }
 }
 
 
 /// @brief Elementwise addition of 2 matrices of the same size.
 void matadd_fwd(float* y, const float* m1, const float* m2, int rows, int cols) {
+    #pragma omp parallel for
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
             int idx = i * cols + j;
@@ -134,6 +144,7 @@ void matadd_fwd(float* y, const float* m1, const float* m2, int rows, int cols) 
 /// @brief Compute gradient for weights and inputs for matrix addition.
 void matadd_bkwd(float* dm1, float* dm2,
                  const float* dy, int rows, int cols) {
+    #pragma omp parallel for
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
             int idx = i * rows + j;
