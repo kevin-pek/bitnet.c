@@ -22,15 +22,15 @@ typedef struct {
 typedef struct {
     FILE* images;
     FILE* labels;
-    uint32_t ptr;
-    uint16_t size;
+    size_t idx;
+    size_t size;
 } mnist_dataset_t;
 
 // represents a batch of samples
 typedef struct {
     mnist_image_t* images;
-    uint8_t* labels;
-    uint16_t size;
+    unsigned char* labels;
+    size_t size;
 } mnist_batch_t;
 
 
@@ -64,13 +64,11 @@ mnist_dataset_t* mnist_init_dataset(const char* imagespath, const char* labelspa
 
     magic_number = read_int(labels_fp);
     num_items = read_int(labels_fp);
-    num_rows = read_int(labels_fp);
-    num_cols = read_int(labels_fp);
-    printf("Magic Number: %d, Number of Labels: %d, Rows: %d, Columns: %d\n",
-            magic_number, num_items, num_rows, num_cols);
+    printf("Magic Number: %d, Number of Labels: %d\n",
+            magic_number, num_items);
 
     mnist_dataset_t *dataset = (mnist_dataset_t*) malloc(sizeof(mnist_dataset_t));
-    dataset->ptr = 0;
+    dataset->idx = 0;
     dataset->size = num_items;
     dataset->images = img_fp;
     dataset->labels = labels_fp;
@@ -79,28 +77,31 @@ mnist_dataset_t* mnist_init_dataset(const char* imagespath, const char* labelspa
 
 
 int mnist_get_next_batch(mnist_batch_t* batch, mnist_dataset_t* dataset) {
-    if (dataset->ptr + batch->size > dataset->size) {
-        batch->size = dataset->size - dataset->ptr;
+    size_t n_samples = batch->size;
+    // Decrement samples to read if remaining samples are less than the dataset size.
+    if (dataset->idx + batch->size > dataset->size) {
+        n_samples = dataset->size - dataset->idx;
     }
-    if (fread(batch->images, sizeof(mnist_image_t), batch->size, dataset->images) != 1) {
+
+    size_t bytes_read = fread(batch->images, sizeof(mnist_image_t), n_samples, dataset->images);
+    if (bytes_read != n_samples) {
         fprintf(stderr, "Failed to read image data!\n");
-        free(batch->images);
-        fclose(dataset->images);
         return 1;
     }
-    if (fread(batch->labels, 1, batch->size, dataset->images) != 1) {
+
+    if (fread(batch->labels, 1, n_samples, dataset->images) != n_samples) {
         fprintf(stderr, "Failed to read label data!\n");
-        free(batch->images);
-        fclose(dataset->images);
         return 2;
     }
+    printf("label: %hhu\n", batch->labels[0]);
 
     return 0;
 }
 
 
+// Rewind file pointer to the start of the file.
 void mnist_reset_dataset(mnist_dataset_t* dataset) {
-    dataset->ptr = 0;
+    dataset->idx = 0;
     rewind(dataset->images);
     rewind(dataset->labels);
 }
@@ -110,6 +111,14 @@ void mnist_free_dataset(mnist_dataset_t* dataset) {
     fclose(dataset->images);
     fclose(dataset->labels);
     free(dataset);
+}
+
+
+// Free memory for batch. We do not free the pointer to the batch as it is
+// allocated on the stack.
+void mnist_batch_free(mnist_batch_t* batch) {
+    free(batch->images);
+    free(batch->labels);
 }
 
 #endif

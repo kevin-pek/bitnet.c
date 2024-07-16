@@ -75,7 +75,7 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
                 printf("Elem (%d, %d):\n", i, j);
             #endif
             const int8_t* xq_ptr = xq + j; // pointer to first row at our current column
-            const uint8_t* wq_ptr = wq + i * (m / 8); // pointer to start of row of weight matrix
+            const uint8_t* wq_ptr = wq + i * ((m + 7) / 8); // pointer to start of row of weight matrix
             int32_t acc = 0; // accumulate results in larger int to prevent overflow
             for (int k = 0; k < m; k += 8) {
                 #ifdef DEBUG
@@ -84,7 +84,9 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
                     printf("\n");
                 #endif
                 // multiply the sign bits of current wq byte with input activations
-                for (int l = 0; l < 8; l++) {
+                // for (int l = 0; l < 8; l++) {
+                int l = 0;
+                do {
                     uint8_t mask = 0x80 >> l; // mask out the bits that are not in use
                     // bit of 1 represents negative number
                     if ((wq_ptr[k / 8] & mask) != 0)
@@ -92,7 +94,8 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
                     else
                         acc += (int32_t) (*xq_ptr);
                     xq_ptr += b; // move on to the next row in matrix
-                }
+                    l++;
+                } while (k * 8 + l < m); // this version should support any number of columns in the weight matrix
             }
             yq[i * b + j] = (int8_t) acc;
         }
