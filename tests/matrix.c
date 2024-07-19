@@ -2,8 +2,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "../utils/matrix.h"
-#include "../utils/logging.h"
 
+#ifdef DEBUG
+#include "../utils/logging.h"
+#endif
 
 #define TOLERANCE 1e-5
 

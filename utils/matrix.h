@@ -7,14 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#ifdef OMP
-#include <omp.h>
-#endif
 
 #define PI 3.1415927f // max precision of π for 32 bit floating point numbers
 
 
-/// @brief Compute mean of a input vector of given length.
+// Compute mean of a input vector of given length.
 static inline float mean(const float* x, int len) {
     float sum = 0.0f;
     for (int i = 0; i < len; i++)
@@ -23,14 +20,14 @@ static inline float mean(const float* x, int len) {
 }
 
 
-/// @brief Return a random float [0, 1)
+// Return a random float [0, 1)
 static inline float rand_float() {
     return (float) rand() / ((float) RAND_MAX + 1.0f);
 }
 
 
-/// @brief Sample from standard normal distribution N(0,1)
-///        µ + εσ = 0 + z * 1
+// Sample from standard normal distribution N(0,1)
+// µ + εσ = 0 + z * 1
 static inline float std_norm() {
     return sqrtf(-2.0f * logf(rand_float()) * cosf(2.0f * PI * rand_float()));
 }
@@ -44,7 +41,6 @@ static inline float std_norm() {
 /// @param m input dims, number of cols in weight matrix, rows in x
 /// @param b batch size, num cols in matrix x
 void matmul_fwd(float* y, const float* x, const float* w, int n, int m, int b) {
-    #pragma omp parallel for
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < b; j++) {
             float* y_ij = y + i * b + j;
@@ -68,7 +64,6 @@ void matmul_fwd(float* y, const float* x, const float* w, int n, int m, int b) {
 /// @param b  batch size, num cols in matrix x
 void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
                    int n, int m, int b) {
-    #pragma omp parallel for
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < b; j++) {
             #ifdef DEBUG
@@ -118,7 +113,6 @@ void matmul_bkwd(float* dw, float* dx,
     memset(dx, 0, m * b * sizeof(float));
     memset(dw, 0, n * m * sizeof(float));
 
-    #pragma omp parallel for
     for (int i = 0; i < n; i++) {
         for (int k = 0; k < m; k++) {
             for (int j = 0; j < b; j++) {
@@ -134,7 +128,6 @@ void matmul_bkwd(float* dw, float* dx,
 
 /// @brief Elementwise addition of 2 matrices of the same size.
 void matadd_fwd(float* y, const float* m1, const float* m2, int rows, int cols) {
-    #pragma omp parallel for
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
             int idx = i * cols + j;
@@ -147,7 +140,6 @@ void matadd_fwd(float* y, const float* m1, const float* m2, int rows, int cols) 
 /// @brief Compute gradient for weights and inputs for matrix addition.
 void matadd_bkwd(float* dm1, float* dm2,
                  const float* dy, int rows, int cols) {
-    #pragma omp parallel for
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
             int idx = i * rows + j;

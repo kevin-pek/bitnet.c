@@ -37,17 +37,17 @@ void bitlinear_train_init(bitlinear_mem_t* bitlin, float* arr, int in_dim, int o
 
     arr_ptr += in_dim * b;
     bitlin->rms = arr_ptr;
-    memset(bitlin->x, 0, in_dim * b);
+    memset(bitlin->rms, 0, in_dim * b);
 
     arr_ptr += in_dim * b;
     bitlin->w = arr_ptr;
-    arr_ptr += in_dim * out_dim * b;
     mat_init_kaiming(bitlin->w, in_dim * out_dim * b);
 
-    bitlin->dw = arr_ptr;
     arr_ptr += in_dim * out_dim * b;
+    bitlin->dw = arr_ptr;
     memset(bitlin->dw, 0, in_dim * out_dim * b);
 
+    arr_ptr += in_dim * out_dim * b;
     bitlin->dg = arr_ptr;
     memset(bitlin->dg, 0, in_dim * b);
 }

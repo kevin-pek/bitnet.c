@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 
-inline void printbin8(char num) {
+inline void printbin8(uint8_t num) {
     for (int i = 7; i >= 0; i--)
         printf("%d", (num >> i) & 1);
 }
