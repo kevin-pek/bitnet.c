@@ -9,35 +9,44 @@
 #include "rmsnorm.h"
 #include "../utils/matrix.h"
 
-// store weights, inputs and gradients
+// Store outputs of inputs to layers for gradient computation.
 typedef struct {
-    float* x;   // input to bitlinear layer
-    float* g;   // scaling factors for rmsnorm
-    float* rms; // output of rmsnorm, input to bit matrix multiplication
-    float* w;   // weights are stored in full precision for training
-    float* dw;
-    float* dg;
+    float* x;     // input to bitlinear layer
+    float* y_rms; // output of rmsnorm, input to bit matrix multiplication
+    float* w;     // weights are stored in row major order and full precision for training
 } bitlinear_mem_t;
 
 typedef struct {
-    float* g;
+    float* dw;
+    float* dg;
+} bitlinear_grad_t;
+
+typedef struct {
+    float* g;    // scaling factors for rmsnorm
     uint8_t* wq; // 1-bit quantized weights for bit matrix
+    int8_t* xq;  // 8 bit quantized input activations
+    int8_t* yq;  // 8 bit quantized outputs
 } bitlinear_t;
 
 
+void bitlinear_init(bitlinaer_t* bitlin, float* arr, size_t in_dim, size_t out_dim, size_t batch_size) {
+    size_t n_params = in_dim;
+    mat_init_kaiming(arr_ptr)
+}
+
 // Assign pointers to memory regions for the bitlinear layer.
-void bitlinear_train_init(bitlinear_mem_t* bitlin, float* arr, int in_dim, int out_dim, int b) {
+void bitlinear_init(bitlinear_t* bitlin, float* arr, int in_dim, int out_dim, int b) {
     float* arr_ptr = arr;
     bitlin->x = arr_ptr;
-    memset(bitlin->x, 0, in_dim * b);
+    memset(bitlin->x, 0, sizeof(float) * in_dim * b);
 
     arr_ptr += in_dim * b;
     bitlin->g = arr_ptr;
     mat_init_kaiming(bitlin->g, in_dim * b);
 
     arr_ptr += in_dim * b;
-    bitlin->rms = arr_ptr;
-    memset(bitlin->rms, 0, in_dim * b);
+    bitlin->y_rms = arr_ptr;
+    memset(bitlin->y_rms, 0, sizeof(float) * in_dim * b);
 
     arr_ptr += in_dim * b;
     bitlin->w = arr_ptr;
@@ -45,11 +54,51 @@ void bitlinear_train_init(bitlinear_mem_t* bitlin, float* arr, int in_dim, int o
 
     arr_ptr += in_dim * out_dim * b;
     bitlin->dw = arr_ptr;
-    memset(bitlin->dw, 0, in_dim * out_dim * b);
+    memset(bitlin->dw, 0, sizeof(float) * in_dim * out_dim * b);
 
     arr_ptr += in_dim * out_dim * b;
     bitlin->dg = arr_ptr;
-    memset(bitlin->dg, 0, in_dim * b);
+    memset(bitlin->dg, 0, sizeof(float) * in_dim * b);
+}
+
+
+/**
+ * @brief Allocate memory for a single bitlinear layer and initialize them to 0.
+ * 
+ * @param bitlin pointer to bitlinear parameters
+ * @param in_dim input dimension
+ * @param out_dim output dimension
+ * @param batch_size batch_size
+ * @return 0 if successful, non-zero if error occurred.
+ */
+int bitlinear_alloc(bitlinear_t* bitlin, size_t in_dim, size_t out_dim, size_t batch_size) {
+    int exit_code = 0;
+
+    size_t w_params = in_dim * out_dim * batch_size;
+    bitlin->wq = (uint8_t*) calloc(w_params, sizeof(uint8_t));
+    if (bitlin->wq == NULL) { exit_code = 1; goto cleanup; }
+
+    size_t in_params = in_dim * batch_size;
+    bitlin->xq = (int8_t*) calloc(in_params, sizeof(int8_t));
+    if (bitlin->xq == NULL) { exit_code = 2; goto cleanup; }
+
+    size_t out_params = out_dim * batch_size;
+    bitlin->yq = (int8_t*) calloc(out_params, sizeof(int8_t));
+    if (bitlin->yq == NULL) { exit_code = 3; goto cleanup; }
+
+    size_t scaling_params = in_dim * batch_size;
+    bitlin->g = (float*) calloc(scaling_params, sizeof(float));
+    if (bitlin->g == NULL) { exit_code = 4; goto cleanup; }
+
+cleanup:
+    if (exit_code != 0) {
+        fprintf(stderr, "Failed to allocate memory for bitlinear! Exit code: %d\n", exit_code);
+        if (bitlin->wq) free(bitlin->wq);
+        if (bitlin->xq) free(bitlin->xq);
+        if (bitlin->yq) free(bitlin->yq);
+        if (bitlin->g) free(bitlin->g);
+    }
+    return exit_code;
 }
 
 
@@ -115,28 +164,30 @@ static inline void weight_quant(uint8_t* wq, const float* w, int len) {
 }
 
 
-/// @brief Forward pass with floating point weights. This applies quantization
-///        to the floating point weights w before doing matrix multiplication.
-/// @param y       pointer to output matrix
-/// @param rms     pointer to store RMSNorm layer output
-/// @param x       pointer to input matrix
-/// @param w       pointer to weights matrix
-/// @param g       scaling factor for rmsnorm layer
-/// @param in_dim  dimensionality of input vectors, cols of weight matrix
-/// @param out_dim dimensionality of output vectors, rows of weight matrix
-/// @param batch_size
+/**
+ * @brief Forward pass with floating point weights. This applies quantization
+ *        to the floating point weights w before doing matrix multiplication.
+ * @param y        pointer to output matrix
+ * @param rms      pointer to store RMSNorm layer output
+ * @param x        pointer to input matrix
+ * @param w        pointer to weights matrix
+ * @param g        scaling factor for rmsnorm layer
+ * @param in_dim   dimensionality of input vectors, cols of weight matrix
+ * @param out_dim  dimensionality of output vectors, rows of weight matrix
+ * @param batch_size
+ */
 void bitlinear_fwd(float* y, float* rms,
                    const float* x, const float* w, const float* g,
-                   int in_dim, int out_dim, int batch_size) {
-    size_t w_params = batch_size * out_dim * ((in_dim + 7) / 8); // each row will contain padding if in_dim is not a multiple of 8
-    // TODO: Error handling for these functions
-    uint8_t* wq = (uint8_t*) malloc(w_params);
-    memset(wq, 0, w_params); // initialize weights to 0
-    int8_t* xq = (int8_t*) malloc(in_dim * batch_size);
-    int8_t* yq = (int8_t*) malloc(out_dim * batch_size);
+                   uint8_t* wq, int8_t* yq, int8_t* xq,
+                   size_t in_dim, size_t out_dim, size_t batch_size) {
+    // size_t w_params = batch_size * out_dim * ((in_dim + 7) / 8); // each row will contain padding if in_dim is not a multiple of 8
+    // uint8_t* wq = (uint8_t*) malloc(w_params);
+    // memset(wq, 0, w_params); // initialize weights to 0
+    // int8_t* xq = (int8_t*) malloc(in_dim * batch_size);
+    // int8_t* yq = (int8_t*) malloc(out_dim * batch_size);
 
     rmsnorm_fwd(rms, x, g, in_dim, batch_size);
-    for (int b = 0; b < batch_size; b++) {
+    for (size_t b = 0; b < batch_size; b++) {
         float* rms_b = rms + b * in_dim;
         int8_t* xq_b = xq + b * in_dim;
         int8_t* yq_b = yq + b * out_dim;
@@ -149,9 +200,9 @@ void bitlinear_fwd(float* y, float* rms,
         activation_dequant(y_b, yq_b, beta, scale, out_dim);
     }
 
-    free(yq);
-    free(wq);
-    free(xq);
+    // free(yq);
+    // free(wq);
+    // free(xq);
 }
 
 

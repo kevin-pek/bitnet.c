@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include "../utils/matrix.h"
@@ -10,17 +11,17 @@
 #define TOLERANCE 1e-5
 
 
-void assert_float_mat_eq(const float* res, const float* exp, int rows, int cols) {
-    for (int i = 0; i < rows; ++i)
-        for (int j = 0; j < cols; ++j)
+void assert_float_mat_eq(const float* res, const float* exp, size_t rows, size_t cols) {
+    for (size_t i = 0; i < rows; ++i)
+        for (size_t j = 0; j < cols; ++j)
             assert(fabs(res[i * cols + j] - exp[i * cols + j]) <= TOLERANCE);
     printf("Test case passed!\n");
 }
 
 
-void assert_int8_mat_eq(const int8_t* res, const int8_t* exp, int rows, int cols) {
-    for (int i = 0; i < rows; ++i)
-        for (int j = 0; j < cols; ++j)
+void assert_int8_mat_eq(const int8_t* res, const int8_t* exp, size_t rows, size_t cols) {
+    for (size_t i = 0; i < rows; ++i)
+        for (size_t j = 0; j < cols; ++j)
             assert(res[i * cols + j] == exp[i * cols + j]);
     printf("Test case passed!\n");
 }
@@ -53,7 +54,7 @@ void test_matmul() {
         1908, 2136,
         2420, 2712
     };
-    int n = 5, m = 8, b = 2;
+    size_t n = 5, m = 8, b = 2;
     printf("Test Case 1:\n");
     matmul_fwd(y, x, w, n, m, b);
     print_mat(y, n, b);
@@ -67,18 +68,18 @@ void test_bitmatmul() {
     // sum all entries in the matrix
     int8_t xq1[] = {1, 0, -1, 0, 1, 1, -1, -1};
     uint8_t wq1[] = {0b00000000, 0b00000000};
-    int rows_w1 = 2;
-    int cols_w1 = 8;
-    int cols_x1 = 1;
+    size_t rows_w1 = 2;
+    size_t cols_w1 = 8;
+    size_t cols_x1 = 1;
     int8_t yq1[2 * 1] = {0};
     int8_t expected_yq1[2 * 1] = {0};
     #ifdef DEBUG
-        for (int i = 0; i < cols_w1; i++) {
+        for (size_t i = 0; i < cols_w1; i++) {
             printbin8(xq1[i]);
             printf("\n");
         }
         printf("Weights\n");
-        for (int i = 0; i < rows_w1; i++) {
+        for (size_t i = 0; i < rows_w1; i++) {
             printbin8(wq1[i]);
             printf("\n");
         }
@@ -101,9 +102,9 @@ void test_bitmatmul() {
         0, 0
     };
     uint8_t wq2[] = {0b00000000, 0b11111111, 0b00100000};
-    int rows_w2 = 3;
-    int cols_w2 = 8;
-    int cols_x2 = 2;
+    size_t rows_w2 = 3;
+    size_t cols_w2 = 8;
+    size_t cols_x2 = 2;
     int8_t yq2[3 * 2] = {0};
     int8_t expected_yq2[3 * 2] = {
         -13, 13,

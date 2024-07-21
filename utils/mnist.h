@@ -1,6 +1,6 @@
-/*
-This implementation is mostly based from this repo: https://github.com/AndrewCarterUK/mnist-neural-network-plain-c
-*/
+/**
+ * This implementation is mostly based from this repo: https://github.com/AndrewCarterUK/mnist-neural-network-plain-c.
+ */
 
 #ifndef MNIST_H
 #define MNIST_H
@@ -18,7 +18,7 @@ typedef struct {
     uint8_t pixels[MNIST_IMAGE_SIZE];
 } mnist_image_t;
 
-// represents the dataaet through the file pointers
+// Store dataset information and file pointers.
 typedef struct {
     FILE* images;
     FILE* labels;
@@ -26,7 +26,7 @@ typedef struct {
     size_t size;
 } mnist_dataset_t;
 
-// represents a batch of samples
+// Stores information for a batch of samples.
 typedef struct {
     mnist_image_t* images;
     unsigned char* labels;
@@ -34,6 +34,7 @@ typedef struct {
 } mnist_batch_t;
 
 
+// Read magic numbers from file pointer.
 int read_int(FILE* fp) {
     unsigned char bytes[4];
     if (fread(bytes, 4, 1, fp) != 1) {
@@ -44,11 +45,13 @@ int read_int(FILE* fp) {
 }
 
 
+// Open files and allocate memory for dataset and initialize values.
 mnist_dataset_t* mnist_init_dataset(const char* imagespath, const char* labelspath) {
     FILE* img_fp = fopen(imagespath, "rb");
     if (img_fp == NULL) {
         return NULL;
     }
+
     FILE* labels_fp = fopen(labelspath, "rb");
     if (labels_fp == NULL) {
         fclose(img_fp);
@@ -68,14 +71,22 @@ mnist_dataset_t* mnist_init_dataset(const char* imagespath, const char* labelspa
             magic_number, num_items);
 
     mnist_dataset_t *dataset = (mnist_dataset_t*) malloc(sizeof(mnist_dataset_t));
+    if (dataset == NULL) {
+        fclose(img_fp);
+        fclose(labels_fp);
+        return NULL;
+    }
+
     dataset->idx = 0;
     dataset->size = num_items;
     dataset->images = img_fp;
     dataset->labels = labels_fp;
+
     return dataset;
 }
 
 
+// Get next batch of dataset. Return 0 if successful, non-zero if error occurred.
 int mnist_get_next_batch(mnist_batch_t* batch, mnist_dataset_t* dataset) {
     size_t n_samples = batch->size;
     // Decrement samples to read if remaining samples are less than the dataset size.
@@ -114,8 +125,7 @@ void mnist_free_dataset(mnist_dataset_t* dataset) {
 }
 
 
-// Free memory for batch. We do not free the pointer to the batch as it is
-// allocated on the stack.
+// Free memory for batch. We do not free the pointer to the batch as it is allocated on the stack.
 void mnist_batch_free(mnist_batch_t* batch) {
     free(batch->images);
     free(batch->labels);

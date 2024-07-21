@@ -13,7 +13,7 @@
 #include "utils/optim.h"
 
 #define BATCH_SIZE 64
-#define HIDDEN_SIZE 512
+#define HIDDEN_SIZE 32
 #define EPOCHS 10
 #define LR 1e-4
 #define EPS 1e-8
@@ -21,16 +21,14 @@
 #define BETA2 0.999f
 #define WEIGHT_DECAY 1e-2f
 
-
 typedef struct {
-    bitmlp_mem_t* params;
-    float* logits; // prediction logits
-    float* probs;  // prediction probabilities
-    int d; // input dims
-    int h; // hidden dims
-    int o; // output dims
+    bitmlp_mem_t* mem;
+    bitmlp_grad_t* grads;
+    bitmlp_t* params;
+    size_t d; // input dims
+    size_t h; // hidden dims
+    size_t o; // output dims
 } bitmlp_config_t;
-
 
 typedef struct {
     int correct;
@@ -57,40 +55,38 @@ int save_weights(bitmlp_config_t* model, const char* filepath) {
 
 
 void zero_grad(bitmlp_config_t* model, size_t b) {
-    memset(model->params->lin1.dg, 0, sizeof(float) * b * model->d);
-    memset(model->params->lin1.dw, 0, sizeof(float) * b * model->d * model->h);
-    memset(model->params->lin2.dg, 0, sizeof(float) * b * model->d);
-    memset(model->params->lin2.dw, 0, sizeof(float) * b * model->d * model->h);
+    memset(model->grads->lin1.dg, 0, sizeof(float) * b * model->d);
+    memset(model->grads->lin1.dw, 0, sizeof(float) * b * model->d * model->h);
+    memset(model->grads->lin2.dg, 0, sizeof(float) * b * model->d);
+    memset(model->grads->lin2.dw, 0, sizeof(float) * b * model->d * model->h);
 }
 
 
-void update_weights(bitmlp_config_t* model, adamw_t* optim) {}
-
-
 // Single training step for a batch of inputs for the model.
-void training_step(float* y, bitmlp_config_t* model, mnist_batch_t* batch) {
-    bitmlp_mem_t* params = model->params;
-    uint32_t* labels = (uint32_t*) malloc(sizeof(uint32_t) * batch->size);
+void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
+    bitmlp_mem_t* mem = model->mem;
+    bitmlp_grad_t* grads = model->grads;
+    bitmlp_t* params = model->params;
+    uint32_t labels[batch->size];
 
     // cast uint8 inputs to float to work with our MLP implementation
-    int d = batch->size * model->d;
     for (int i = 0; i < batch->size; i++) {
-        for (int j = 0; j < d; j++) {
-            int idx = i * d + j;
-            params->lin1.x[idx] = (float) batch->images[i].pixels[j];
+        for (int j = 0; j < model->d; j++) {
+            int idx = i * model->d + j;
+            mem->lin1.x[idx] = (float) batch->images[i].pixels[j];
         }
         labels[i] = (uint32_t) batch->labels[i];
     }
 
     mlp_fwd(
-        model->logits,
-        params->x_gelu,
-        params->lin1.rms,
-        params->lin2.rms,
-        params->lin2.x,
-        params->lin1.x,
-        params->lin1.w,
-        params->lin2.w,
+        mem->logits,
+        mem->x_gelu,
+        mem->lin1.y_rms,
+        mem->lin2.y_rms,
+        mem->lin2.x,
+        mem->lin1.x,
+        mem->lin1.w,
+        mem->lin2.w,
         params->lin1.g,
         params->lin2.g,
         model->d,
@@ -99,32 +95,33 @@ void training_step(float* y, bitmlp_config_t* model, mnist_batch_t* batch) {
         batch->size
     );
     printf("MLP Logits:\n");
-    print_mat(model->logits, model->d, batch->size);
-    softmax_fwd(model->probs, model->logits, model->d, batch->size);
-    float loss = crossentropy_fwd(model->probs, labels, model->o, batch->size);
+    print_mat(mem->logits, model->d, batch->size);
+    softmax_fwd(mem->probs, mem->logits, model->d, batch->size);
+    float loss = crossentropy_fwd(mem->probs, &labels, model->o, batch->size);
     printf("Training loss: %.4f\n", loss); // loss is only used for logging
 
     zero_grad(model, batch->size);
 
-    float* dy = y;
     // float* dloss = {1 / (batch->size)}; // gradient of loss is fixed as 1 / batch_size
-    crossentropy_bkwd(dy, model->probs, labels, model->o, batch->size);
-    softmax_bkwd(dy, y, dy, model->d, batch->size);
+    crossentropy_bkwd(grads->dy, mem->probs, labels, model->o, batch->size);
+    float* dloss = mem->logits; // reuse memory for logits to propagate gradients for loss
+    softmax_bkwd(dloss, mem->probs, grads->dy, model->d, batch->size);
     mlp_bkwd(
-        dy,
-        params->lin1.dw,
-        params->lin2.dw,
-        params->lin1.dg,
-        params->lin2.dg,
-        params->lin2.x,
-        params->lin2.w,
+        dloss,
+        grads->lin1.dw,
+        grads->lin2.dw,
+        grads->lin1.dg,
+        grads->lin2.dg,
+        grads->dy,
+        mem->lin2.x,
+        mem->lin2.w,
         params->lin2.g,
-        params->lin2.rms,
-        params->x_gelu,
-        params->lin1.x,
-        params->lin1.w,
+        mem->lin2.y_rms,
+        mem->x_gelu,
+        mem->lin1.x,
+        mem->lin1.w,
         params->lin1.g,
-        params->lin1.rms,
+        mem->lin1.y_rms,
         model->d,
         model->h,
         model->o,
@@ -133,30 +130,29 @@ void training_step(float* y, bitmlp_config_t* model, mnist_batch_t* batch) {
 }
 
 
-void validation_step(float* y, bitmlp_config_t* model, mnist_batch_t* batch, classifier_metrics_t* metrics) {
-    bitmlp_mem_t* params = model->params;
-    uint32_t* labels = (uint32_t*) malloc(sizeof(uint32_t) * batch->size);
+void validation_step(bitmlp_config_t* model, mnist_batch_t* batch, classifier_metrics_t* metrics) {
+    bitmlp_mem_t* mem = model->mem;
+    bitmlp_t* params = model->params;
+    uint32_t labels[batch->size];
 
     // cast uint8 inputs to float to work with our MLP implementation
-    int d = batch->size * model->d;
     for (int i = 0; i < batch->size; i++) {
-        for (int j = 0; j < d; j++) {
-            int idx = i * d + j;
-            params->lin1.x[idx] = (float) batch->images[i].pixels[j];
+        for (int j = 0; j < model->d; j++) {
+            int idx = i * model->d + j;
+            mem->lin1.x[idx] = (float) batch->images[i].pixels[j];
         }
         labels[i] = (uint32_t) batch->labels[i];
     }
 
-    float* logits = y;
     mlp_fwd(
-        logits,
-        params->x_gelu,
-        params->lin1.rms,
-        params->lin2.rms,
-        params->lin2.x,
-        params->lin1.x,
-        params->lin1.w,
-        params->lin2.w,
+        mem->logits,
+        mem->x_gelu,
+        mem->lin1.y_rms,
+        mem->lin2.y_rms,
+        mem->lin2.x,
+        mem->lin1.x,
+        mem->lin1.w,
+        mem->lin2.w,
         params->lin1.g,
         params->lin2.g,
         model->d,
@@ -164,13 +160,13 @@ void validation_step(float* y, bitmlp_config_t* model, mnist_batch_t* batch, cla
         model->o,
         batch->size
     );
-    float* probs = y;
-    softmax_fwd(probs, logits, model->d, batch->size);
+    softmax_fwd(mem->probs, mem->logits, model->d, batch->size);
 
     for (int b = 0; b < batch->size; b++) {
         int pred = b * model->o;
         for (int i = 0; i < model->o; i++) {
-            if (probs[b * model->o + i] > probs[pred]) pred = b * model->o + i;
+            if (mem->probs[b * model->o + i] > mem->probs[pred])
+                pred = b * model->o + i;
         }
         if (pred == batch->labels[b]) metrics->correct++;
         else metrics->wrong++;
@@ -202,39 +198,34 @@ int main() {
     };
 
     mnist_batch_t batch = { .size = BATCH_SIZE };
-    batch.images = (mnist_image_t*) malloc(sizeof(mnist_image_t) * batch.size);
+    batch.images = (mnist_image_t*) calloc(batch.size, sizeof(mnist_image_t));
     if (batch.images == NULL) { exit_code = 3; goto cleanup; }
 
-    batch.labels = (uint8_t*) malloc(sizeof(uint8_t) * batch.size);
+    batch.labels = (uint8_t*) calloc(batch.size, sizeof(uint8_t));
     if (batch.labels == NULL) { exit_code = 4; goto cleanup; }
 
     // Allocate memory for MLP and model
-    size_t bitlin_params = model.d * (2 * model.h + 4);
+    size_t bitlin1_params = model.d * (2 * model.h + 4);
     size_t gelu_params = model.d;
-    size_t n_params = 2 * bitlin_params + gelu_params;
-    float* arr = (float*) malloc(sizeof(float) * batch.size * n_params);
-    if (arr == NULL) { exit_code = 5; goto cleanup; }
+    size_t bitlin2_params = model.h * (2 * model.o + 4);
+    size_t out_params = model.o;
+    size_t n_params = bitlin1_params + gelu_params + bitlin2_params + 2 * out_params;
+    float* params = (float*) calloc(batch.size * n_params, sizeof(float));
+    if (params == NULL) { exit_code = 5; goto cleanup; }
 
-    model.probs = (float*) malloc(sizeof(float) * batch.size * model.o);
-    if (model.probs == NULL) { exit_code = 6; goto cleanup; }
-
-    model.logits = (float*) malloc(sizeof(float) * batch.size * model.o);
-    if (model.logits == NULL) {
-        fprintf(stderr, "Error allocating memory for logits!");
-        free(model.probs);
-        free(model.probs);
-        return 3;
-    }
-
-    mlp_train_init(&mlp, arr, model.d, model.h, model.o, batch.size);
+    mlp_init(&mlp, params, model.d, model.h, model.o, batch.size);
+    mat_init_kaiming();
     adamw_t optim;
-    adamw_alloc_init(&optim, LR, BETA1, BETA2, EPS, WEIGHT_DECAY, n_params);
+    if (adamw_alloc(&optim, n_params) != 0) {
+        exit_code = 6;
+        goto cleanup;
+    }
+    adamw_init(&optim, LR, BETA1, BETA2, EPS, WEIGHT_DECAY);
 
-    float* y = (float*) malloc(sizeof(float) * batch.size * model.d);
     for (int i = 0; i < EPOCHS; i++) {
         while (mnist_get_next_batch(&batch, trainset) == 0) {
-            training_step(y, &model, &batch);
-            update_weights(&model, &optim);
+            training_step(&model, &batch);
+            adamw_update(&optim, model.params, model.grads, i);
         }
         mnist_reset_dataset(trainset);
     }
@@ -248,17 +239,17 @@ int main() {
     save_weights(&model, "output/mnist_bitmlp.bin");
 
     adamw_free(&optim);
-    free(arr);
+    free(params);
     mnist_batch_free(&batch);
 
 cleanup:
     if (exit_code != 0)
-        fprintf(stderr, "Error occurred in train script. Exit code: %d", exit_code);
+        fprintf(stderr, "Error occurred in train script. Exit code: %d\n", exit_code);
     if (trainset) mnist_free_dataset(trainset);
     if (testset) mnist_free_dataset(testset);
     if (batch.images) free(batch.images);
     if (batch.labels) free(batch.labels);
-    if (model.probs) free(model.probs);
+    if (model.params->probs) free(model.probs);
     if (model.logits) free(model.logits);
 
     return 0;
