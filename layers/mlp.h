@@ -34,18 +34,23 @@ void mlp_alloc(bitmlp_t* mlp, )
 /// @param h hidden dimension
 /// @param o output dimension
 /// @param b batch size
-void mlp_init(bitmlp_mem_t* mlp, float* arr, int d, int h, int o, int b) {
+void mlp_init(bitmlp_t* mlp, bitmlp_mem_t* mem, float* arr, int d, int h, int o, int b) {
     size_t bitlin1_params = b * d * (2 * h + 4);
     size_t gelu_params = b * d;
     size_t bitlin2_params = b * h * (2 * o + 4);
     size_t out_params = b * o;
-    bitlinear_train_init(&mlp->lin1, arr, d, h, b);
+    bitlinear_init(&mlp->lin1, &mem->lin1, arr, d, h, b);
     mlp->x_gelu = arr + bitlin1_params;
-    bitlinear_train_init(&mlp->lin2, arr + bitlin1_params + gelu_params, h, o, b);
+    bitlinear_init(&mlp->lin2, arr + bitlin1_params + gelu_params, h, o, b);
     mlp->logits = arr + bitlin1_params + bitlin2_params + gelu_params;
     memset(mlp->logits, 0, sizeof(float) * out_params);
     mlp->probs = arr + bitlin1_params + bitlin2_params + gelu_params +  out_params;
     memset(mlp->probs, 0, sizeof(float) * out_params);
+}
+
+
+void mlp_train_init(bitmlp_mem_t* mem, bitlinear_grad_t* grads, size_t batch_size) {
+
 }
 
 

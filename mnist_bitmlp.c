@@ -189,7 +189,9 @@ int main() {
     );
     if (testset == NULL) { exit_code = 2; goto cleanup; }
 
-    bitmlp_mem_t mlp;
+    bitmlp_t mlp;
+    bitmlp_mem_t mem;
+    bitmlp_grad_t grads;
     bitmlp_config_t model = {
         .params = &mlp,
         .d = MNIST_IMAGE_SIZE,
@@ -214,7 +216,7 @@ int main() {
     if (params == NULL) { exit_code = 5; goto cleanup; }
 
     mlp_init(&mlp, params, model.d, model.h, model.o, batch.size);
-    mat_init_kaiming();
+    mlp_train_init(&mem, %grads, train_params, model.d
     adamw_t optim;
     if (adamw_alloc(&optim, n_params) != 0) {
         exit_code = 6;

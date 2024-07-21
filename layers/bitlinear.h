@@ -29,36 +29,30 @@ typedef struct {
 } bitlinear_t;
 
 
-void bitlinear_init(bitlinaer_t* bitlin, float* arr, size_t in_dim, size_t out_dim, size_t batch_size) {
-    size_t n_params = in_dim;
-    mat_init_kaiming(arr_ptr)
+// Initialize values for training parameters for matrix.
+void bitlinear_init(bitlinear_t* bitlin, bitlinear_mem_t* mem, float* arr, size_t in_dim, size_t out_dim) {
+    mat_init_kaiming(bitlin->g, in_dim);
+    mat_init_kaiming(mem->w, in_dim * out_dim);
 }
 
-// Assign pointers to memory regions for the bitlinear layer.
-void bitlinear_init(bitlinear_t* bitlin, float* arr, int in_dim, int out_dim, int b) {
+
+// Assign memory regions for intermediate values and gradients in the bitlinear layer.
+void bitlinear_train_init(bitlinear_mem_t* mem, bitlinear_grad_t* grads, float* arr,
+                          size_t in_dim, size_t out_dim, size_t batch_size) {
     float* arr_ptr = arr;
-    bitlin->x = arr_ptr;
-    memset(bitlin->x, 0, sizeof(float) * in_dim * b);
+    mem->x = arr_ptr;
 
-    arr_ptr += in_dim * b;
-    bitlin->g = arr_ptr;
-    mat_init_kaiming(bitlin->g, in_dim * b);
+    arr_ptr += in_dim * batch_size;
+    mem->y_rms = arr_ptr;
 
-    arr_ptr += in_dim * b;
-    bitlin->y_rms = arr_ptr;
-    memset(bitlin->y_rms, 0, sizeof(float) * in_dim * b);
+    arr_ptr += in_dim * batch_size;
+    mem->w = arr_ptr;
 
-    arr_ptr += in_dim * b;
-    bitlin->w = arr_ptr;
-    mat_init_kaiming(bitlin->w, in_dim * out_dim * b);
+    arr_ptr += in_dim * out_dim;
+    grads->dw = arr_ptr;
 
-    arr_ptr += in_dim * out_dim * b;
-    bitlin->dw = arr_ptr;
-    memset(bitlin->dw, 0, sizeof(float) * in_dim * out_dim * b);
-
-    arr_ptr += in_dim * out_dim * b;
-    bitlin->dg = arr_ptr;
-    memset(bitlin->dg, 0, sizeof(float) * in_dim * b);
+    arr_ptr += in_dim * out_dim;
+    grads->dg = arr_ptr;
 }
 
 
