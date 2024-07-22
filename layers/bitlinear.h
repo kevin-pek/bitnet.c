@@ -30,9 +30,21 @@ typedef struct {
 
 
 // Initialize values for training parameters for matrix.
-void bitlinear_init(bitlinear_t* bitlin, bitlinear_mem_t* mem, float* arr, size_t in_dim, size_t out_dim) {
-    mat_init_kaiming(bitlin->g, in_dim);
-    mat_init_kaiming(mem->w, in_dim * out_dim);
+void bitlinear_init(bitlinear_t* bitlin, bitlinear_mem_t* mem, size_t in_dim, size_t out_dim, size_t batch_size) {
+    mat_init_kaiming(bitlin->g, in_dim * batch_size);
+    mat_init_kaiming(mem->w, in_dim * out_dim * batch_size);
+}
+
+
+// Return number of training parameters for bitlinear layer.
+size_t bitlinear_train_params(size_t in_dim, size_t out_dim) {
+    return 3 * in_dim + 2 * (in_dim * out_dim);
+}
+
+
+// Return number of gradient parameters for training bitlinear layer.
+size_t bitlinear_grad_params(size_t in_dim, size_t out_dim) {
+    return in_dim + in_dim * out_dim;
 }
 
 
@@ -58,7 +70,7 @@ void bitlinear_train_init(bitlinear_mem_t* mem, bitlinear_grad_t* grads, float* 
 
 /**
  * @brief Allocate memory for a single bitlinear layer and initialize them to 0.
- * 
+ *
  * @param bitlin pointer to bitlinear parameters
  * @param in_dim input dimension
  * @param out_dim output dimension
@@ -124,11 +136,14 @@ static inline int8_t clip(int x) {
 }
 
 
-/// @brief Quantize activations to 8-bit precision as used in the BitNet paper.
-/// @param xq   array of 8-bit quantized activations
-/// @param x    array of input activations
-/// @param dim  dimensionality of each input vectors
-/// @returns scale factor for input activations
+/**
+ * @brief Quantize activations to 8-bit precision as used in the BitNet paper.
+ *
+ * @param xq   array of 8-bit quantized activations
+ * @param x    array of input activations
+ * @param dim  dimensionality of each input vectors
+ * @returns scale factor for input activations
+ */
 static inline float activation_quant(int8_t* xq, const float* x, int dim) {
     // compute scale = Qb / gamma
     float scale = (float) INT8_MAX / fmaxf(max_abs(x, dim), FLT_MIN);
@@ -145,12 +160,15 @@ static inline void activation_dequant(float* y, int8_t* xq, float beta, float sc
 }
 
 
-/// @brief Centralize weights in give matrix to be 0-mean before sign binarization.
-///        We only need 1 len argument here since values are computed for the
-///        entire matrix.
-/// @param wq  array of quantized weights
-/// @param w   array of matrix weights
-/// @param len number of entries in weight matrix
+/**
+ * @brief Centralize weights in give matrix to be 0-mean before sign binarization.
+ *        We only need 1 len argument here since values are computed for the
+ *        entire matrix.
+ *
+ * @param wq  array of quantized weights
+ * @param w   array of matrix weights
+ * @param len number of entries in weight matrix
+ */
 static inline void weight_quant(uint8_t* wq, const float* w, int len) {
     float e = mean(w, len);
     for (int i = 0; i < len; i++)
@@ -161,6 +179,7 @@ static inline void weight_quant(uint8_t* wq, const float* w, int len) {
 /**
  * @brief Forward pass with floating point weights. This applies quantization
  *        to the floating point weights w before doing matrix multiplication.
+ *
  * @param y        pointer to output matrix
  * @param rms      pointer to store RMSNorm layer output
  * @param x        pointer to input matrix
@@ -174,12 +193,6 @@ void bitlinear_fwd(float* y, float* rms,
                    const float* x, const float* w, const float* g,
                    uint8_t* wq, int8_t* yq, int8_t* xq,
                    size_t in_dim, size_t out_dim, size_t batch_size) {
-    // size_t w_params = batch_size * out_dim * ((in_dim + 7) / 8); // each row will contain padding if in_dim is not a multiple of 8
-    // uint8_t* wq = (uint8_t*) malloc(w_params);
-    // memset(wq, 0, w_params); // initialize weights to 0
-    // int8_t* xq = (int8_t*) malloc(in_dim * batch_size);
-    // int8_t* yq = (int8_t*) malloc(out_dim * batch_size);
-
     rmsnorm_fwd(rms, x, g, in_dim, batch_size);
     for (size_t b = 0; b < batch_size; b++) {
         float* rms_b = rms + b * in_dim;
@@ -193,25 +206,24 @@ void bitlinear_fwd(float* y, float* rms,
         bitmatmul_fwd(yq_b, xq_b, wq, out_dim, in_dim, 1);
         activation_dequant(y_b, yq_b, beta, scale, out_dim);
     }
-
-    // free(yq);
-    // free(wq);
-    // free(xq);
 }
 
 
-/// @brief Compute gradients for BitLinear layer and its RMSNorm weights.
-/// @param dx      gradient of input
-/// @param dw      gradient of bit matrix weigths
-/// @param dg      gradient of rmsnorm scaling factors
-/// @param dy      gradient of loss wrt output of this layer
-/// @param x       input to bitlinear layer
-/// @param w       unquantized weights in bit matrix
-/// @param g       scaling factors for rmsnorm
-/// @param y_rms   output of rmsnorm layer
-/// @param in_dim  dimensionality of input vectors, cols of weight matrix
-/// @param out_dim dimensionality of output vectors, rows of weight matrix
-/// @param batch_size
+/**
+ * @brief Compute gradients for BitLinear layer and its RMSNorm weights.
+ *
+ * @param dx      gradient of input
+ * @param dw      gradient of bit matrix weigths
+ * @param dg      gradient of rmsnorm scaling factors
+ * @param dy      gradient of loss wrt output of this layer
+ * @param x       input to bitlinear layer
+ * @param w       unquantized weights in bit matrix
+ * @param g       scaling factors for rmsnorm
+ * @param y_rms   output of rmsnorm layer
+ * @param in_dim  dimensionality of input vectors, cols of weight matrix
+ * @param out_dim dimensionality of output vectors, rows of weight matrix
+ * @param batch_size
+ */
 void bitlinear_bkwd(float* dx, float* dw, float* dg,
                     const float* dy, const float* x, const float* w, const float* g, const float* y_rms,
                     int in_dim, int out_dim, int batch_size) {
@@ -221,12 +233,11 @@ void bitlinear_bkwd(float* dx, float* dw, float* dg,
 
 
 // Save trained scaling factors and 1-bit weights to file pointer for inference.
-void bitlinear_save_weights(bitlinear_mem_t* params, size_t in_dim, size_t out_dim, FILE* fp) {
+void bitlinear_save_weights(bitlinear_t* params, bitlinear_mem_t* mem, size_t in_dim, size_t out_dim, FILE* fp) {
     fwrite(params->g, sizeof(float), in_dim, fp);
     size_t len = out_dim * ((in_dim + 7) / 8);
-    uint8_t* wq = (uint8_t*) malloc(len);
-    weight_quant(wq, params->w, in_dim * out_dim);
-    fwrite(wq, 1, len, fp);
+    weight_quant(params->wq, mem->w, in_dim * out_dim);
+    fwrite(params->wq, 1, len, fp);
 }
 
 
