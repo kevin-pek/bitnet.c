@@ -224,7 +224,7 @@ int main() {
     if (batch.labels == NULL) { exit_code = 4; goto cleanup; }
 
     // Allocate memory for MLP training params
-    size_t n_params = bitlinear_grad_params(model.d, model.h) + bitlinear_grad_params(model.h, model.o);
+    size_t n_params = model.d + model.d * model.h + model.h + model.h * model.o;
     float* params = (float*) calloc(batch.size * n_params, sizeof(float));
     if (params == NULL) { exit_code = 5; goto cleanup; }
 

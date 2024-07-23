@@ -36,12 +36,6 @@ void bitlinear_init(bitlinear_t* bitlin, bitlinear_mem_t* mem, size_t in_dim, si
 }
 
 
-// Return number of gradient parameters for training bitlinear layer.
-size_t bitlinear_grad_params(size_t in_dim, size_t out_dim) {
-    return in_dim + in_dim * out_dim;
-}
-
-
 // Assign memory regions for intermediate values and gradients in the bitlinear layer.
 void bitlinear_train_init(bitlinear_mem_t* mem, bitlinear_grad_t* grads, float* arr,
                           size_t in_dim, size_t out_dim, size_t batch_size) {
