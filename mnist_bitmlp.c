@@ -298,6 +298,7 @@ int main() {
             adamw_update(&optim, params, grad_params, i + 1);
         }
         mnist_reset_dataset(trainset);
+        batch.size = BATCH_SIZE; // reset batch size in case last batch set it lower
     }
 
     classifier_metrics_t metrics = {0};
