@@ -35,13 +35,13 @@ typedef struct {
 
 
 // Read magic numbers from file pointer.
-int read_int(FILE* fp) {
-    unsigned char bytes[4];
-    if (fread(bytes, 4, 1, fp) != 1) {
+int32_t read_int(FILE* fp) {
+    int32_t bytes;
+    if (fread(&bytes, 4, 1, fp) != 1) {
         return 0;
     }
-    // Convert big endian to little endian
-    return (int)((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]);
+    // MNIST images are stored in big endian, convert it to little endian
+    return __builtin_bswap32(bytes);
 }
 
 
@@ -58,10 +58,10 @@ mnist_dataset_t* mnist_init_dataset(const char* imagespath, const char* labelspa
         return NULL;
     }
 
-    int magic_number = read_int(img_fp);
-    int num_items = read_int(img_fp);
-    int num_rows = read_int(img_fp);
-    int num_cols = read_int(img_fp);
+    int32_t magic_number = read_int(img_fp);
+    int32_t num_items = read_int(img_fp);
+    int32_t num_rows = read_int(img_fp);
+    int32_t num_cols = read_int(img_fp);
     printf("Magic Number: %d, Number of Images: %d, Rows: %d, Columns: %d\n",
             magic_number, num_items, num_rows, num_cols);
 
@@ -96,19 +96,18 @@ int mnist_get_next_batch(mnist_batch_t* batch, mnist_dataset_t* dataset) {
 
     size_t bytes_read = fread(batch->images, sizeof(mnist_image_t), n_samples, dataset->images);
     if (bytes_read != n_samples) {
-        fprintf(stderr, "Failed to read image data!\n");
         return 1;
     }
 
-    uint8_t temp_labels[MNIST_LABELS * batch->size];
-    if (fread(temp_labels, 1, n_samples, dataset->images) != n_samples) {
-        fprintf(stderr, "Failed to read label data!\n");
+    uint8_t temp_labels[n_samples];
+    if (fread(temp_labels, sizeof(uint8_t), n_samples, dataset->labels) != n_samples) {
         return 2;
     }
 
     for (size_t i = 0; i < n_samples; i++) {
         batch->labels[i] = (uint32_t) temp_labels[i];
     }
+    batch->size = n_samples;
 
     return 0;
 }
