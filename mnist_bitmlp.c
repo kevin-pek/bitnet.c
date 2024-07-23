@@ -101,8 +101,10 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
         batch->size
     );
 
-    // printf("MLP Logits:\n");
-    // print_mat(mem->logits, batch->size, model->o);
+#ifdef DEBUG
+    printf("MLP Logits:\n");
+    print_mat(mem->logits, batch->size, model->o);
+#endif
 
     softmax_fwd(mem->probs, mem->logits, model->o, batch->size);
 

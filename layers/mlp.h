@@ -111,15 +111,17 @@ void mlp_fwd(float* y, float* gelu, float* rms1, float* rms2, float* x2,
              const float* x1, const float* w1, const float* w2, const float* g1, const float* g2,
              uint8_t* wq1, int8_t* yq1, int8_t* xq1, uint8_t* wq2, int8_t* yq2, int8_t* xq2,
              size_t d, size_t h, size_t o, size_t b) {
-    // printf("BitMLP inputs:\n");
-    // print_mat(x1, b, d);
-
+#ifdef DEBUG
+    printf("BitMLP inputs:\n");
+    print_mat(x1, b, d);
+#endif
     bitlinear_fwd(gelu, rms1, x1, w1, g1, wq1, yq1, xq1, d, h, b);
     gelu_fwd(x2, gelu, h, b);
     bitlinear_fwd(y, rms2, x2, w2, g2, wq2, yq2, xq2, h, o, b);
-
-    // printf("BitMLP outputs:\n");
-    // print_mat(y, b, o);
+#ifdef DEBUG
+    printf("BitMLP outputs:\n");
+    print_mat(y, b, o);
+#endif
 }
 
 

@@ -118,14 +118,15 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
 void matmul_bkwd(float* dw, float* dx,
                  const float* dy, const float* w, const float* x,
                  size_t n, size_t m, size_t b) {
-    // printf("Matmul backprop:\n");
-    // printf("dW:");
-    // print_mat(dw, n, m);
-    // printf("dx:");
-    // print_mat(dx, m, b);
-    // printf("dy:");
-    // print_mat(dy, b, m);
-
+#ifdef DEBUG
+    printf("Matmul backprop:\n");
+    printf("dW:");
+    print_mat(dw, n, m);
+    printf("dx:");
+    print_mat(dx, m, b);
+    printf("dy:");
+    print_mat(dy, b, m);
+#endif
     for (size_t i = 0; i < n; i++) {
         for (size_t k = 0; k < m; k++) {
             for (size_t j = 0; j < b; j++) {
@@ -136,8 +137,6 @@ void matmul_bkwd(float* dw, float* dx,
             }
         }
     }
-
-    // printf("Matmul backprop done\n");
 }
 
 

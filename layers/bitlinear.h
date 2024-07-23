@@ -187,9 +187,10 @@ void bitlinear_fwd(float* y, float* rms,
                    const float* x, const float* w, const float* g,
                    uint8_t* wq, int8_t* yq, int8_t* xq,
                    size_t in_dim, size_t out_dim, size_t batch_size) {
-    // printf("Bitlinear inputs:\n");
-    // print_mat(x, batch_size, in_dim);
-
+#ifdef DEBUG
+    printf("Bitlinear inputs:\n");
+    print_mat(x, batch_size, in_dim);
+#endif
     rmsnorm_fwd(rms, x, g, in_dim, batch_size);
 
     for (size_t b = 0; b < batch_size; b++) {
@@ -204,9 +205,10 @@ void bitlinear_fwd(float* y, float* rms,
         bitmatmul_fwd(yq_b, xq_b, wq, out_dim, in_dim, 1);
         activation_dequant(y_b, yq_b, beta, scale, out_dim);
     }
-
-    // printf("Bitlinear outputs:\n");
-    // print_mat(y, batch_size, out_dim);
+#ifdef DEBUG
+    printf("Bitlinear outputs:\n");
+    print_mat(y, batch_size, out_dim);
+#endif
 }
 
 
