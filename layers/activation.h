@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stdio.h>
 #include "../utils/matrix.h"
+#include "bitlinear.h"
 
 #define SQRT_2_OVER_PI (sqrtf(2.0f / PI))
 #define A 0.044715f
@@ -12,15 +13,27 @@
 // Apply softmax to input logits.
 void softmax_fwd(float* probs, const float* logits, size_t dim, size_t batch_size) {
     for (size_t b = 0; b < batch_size; b++) {
+        const float* logits_b = logits + b * dim;
+        float* probs_b = probs + b * dim;
+
+        // for numerical stability, use max value of logits to subtract logits
+        float max_logit = logits_b[0];
+        for (size_t i = 1; i < dim; i++)
+            if (logits_b[i] > max_logit)
+                max_logit = logits_b[i];
+
         float sum = 0.0f;
         for (size_t i = 0; i < dim; i++) {
-            sum += expf(logits[b * dim + i]);
+            probs_b[i] = expf(logits_b[i] - max_logit);
+            sum += probs_b[i];
         }
 
         for (size_t i = 0; i < dim; i++) {
-            probs[b * dim + i] /= sum;
+            probs_b[i] /= sum;
         }
     }
+    printf("Softmax probas:\n");
+    print_mat(probs, batch_size, dim);
 }
 
 

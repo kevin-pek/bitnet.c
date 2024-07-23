@@ -101,7 +101,7 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
     printf("MLP Logits:\n");
     print_mat(mem->logits, batch->size, model->o);
 
-    softmax_fwd(mem->probs, mem->logits, model->d, batch->size);
+    softmax_fwd(mem->probs, mem->logits, model->o, batch->size);
     float loss = crossentropy_fwd(mem->probs, batch->labels, model->o, batch->size);
     printf("Training loss: %.4f\n", loss); // loss is only used for logging
 
