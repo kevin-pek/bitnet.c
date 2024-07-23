@@ -10,34 +10,48 @@
 #define A 0.044715f
 
 
-// Apply softmax to input logits.
+/**
+ * @brief Apply softmax to input logits.
+ *
+ * @param probs  output probabilities
+ * @param logits input logits
+ * @param dim    number of dimensions, same as number of labels
+ * @param batch_size
+ */
 void softmax_fwd(float* probs, const float* logits, size_t dim, size_t batch_size) {
     for (size_t b = 0; b < batch_size; b++) {
         const float* logits_b = logits + b * dim;
         float* probs_b = probs + b * dim;
 
         float lse = log_sum_exp(logits_b, dim);
-        for (size_t i = 0; i < dim; i++) {
+        for (size_t i = 0; i < dim; i++)
             probs_b[i] = expf(logits_b[i] - lse);
-        }
     }
     printf("Softmax probas:\n");
     print_mat(probs, batch_size, dim);
 }
 
 
-// Backpropagation for softmax activations.
-void softmax_bkwd(float* dx, const float* y, const float* dy, size_t dim, size_t batch_size) {
+/**
+ * @brief Backpropagation step to compute the gradient of the loss w.r.t probabilities.
+ *        Gradient is given by p_i - y_i, where y_i = 1 if correct class, 0 otherwise.
+ *
+ * @param dloss      gradient of softmax inputs w.r.t loss
+ * @param probs      output probabilities
+ * @param targets    ground truth labels
+ * @param dim        number of dimensions, same as number of labels
+ * @param batch_size
+ */
+void softmax_bkwd(float* dloss, const float* probs, const uint32_t* targets, size_t dim, size_t batch_size) {
     for (size_t b = 0; b < batch_size; b++) {
-        float* dx_b = dx + b * dim;
-        const float* y_b = y + b * dim;
-        const float* dy_b = dy + b * dim;
-        for (size_t i = 0; i < dim; i++) {
-            dx_b[i] = 0;
-            for (size_t j = 0; j < dim; j++)
-                dx_b[i] += (i == j ? y_b[i] * (1 - y_b[i]) : -y_b[i] * y_b[j]) * dy_b[j];
-        }
+        const float* probs_b = probs + b * dim;
+        float* dloss_b = dloss + b * dim;
+
+        for (size_t i = 0; i < dim; i++)
+            dloss_b[i] = probs_b[i] - (i == targets[b] ? 1.0f : 0.0f);
     }
+    printf("Softmax gradients:\n");
+    print_mat(dloss, batch_size, dim);
 }
 
 
