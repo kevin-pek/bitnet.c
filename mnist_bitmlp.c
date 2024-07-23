@@ -59,8 +59,8 @@ int save_weights(bitmlp_config_t* model, const char* filepath) {
 void zero_grad(bitmlp_config_t* model, size_t b) {
     memset(model->grads->lin1.dg, 0, sizeof(float) * b * model->d);
     memset(model->grads->lin1.dw, 0, sizeof(float) * b * model->d * model->h);
-    memset(model->grads->lin2.dg, 0, sizeof(float) * b * model->d);
-    memset(model->grads->lin2.dw, 0, sizeof(float) * b * model->d * model->h);
+    memset(model->grads->lin2.dg, 0, sizeof(float) * b * model->h);
+    memset(model->grads->lin2.dw, 0, sizeof(float) * b * model->h * model->o);
 }
 
 
@@ -280,21 +280,21 @@ int main() {
     float* mem_ptr = mem_params;
     mem.dx = mem_ptr;
     mem_ptr += batch.size * model.d;
-    mem.lin1.x = arr_ptr;
+    mem.lin1.x = mem_ptr;
     arr_ptr += batch.size * model.d;
-    mem.lin1.y_rms = arr_ptr;
+    mem.lin1.y_rms = mem_ptr;
     arr_ptr += batch.size * model.d;
-    mem.x_gelu = arr_ptr;
+    mem.x_gelu = mem_ptr;
     arr_ptr += batch.size * model.h;
-    mem.dy_hidden = arr_ptr;
+    mem.dy_hidden = mem_ptr;
     arr_ptr += batch.size * model.h;
-    mem.lin2.x = arr_ptr;
+    mem.lin2.x = mem_ptr;
     arr_ptr += batch.size * model.h;
-    mem.lin2.y_rms = arr_ptr;
+    mem.lin2.y_rms = mem_ptr;
     arr_ptr += batch.size * model.h;
-    mem.logits = arr_ptr;
+    mem.logits = mem_ptr;
     arr_ptr += batch.size * model.o;
-    mem.probs = arr_ptr;
+    mem.probs = mem_ptr;
 
     // Initialize training parameters
     mlp_init(&mlp, &mem, model.d, model.h, model.o, batch.size);
