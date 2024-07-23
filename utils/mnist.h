@@ -29,7 +29,7 @@ typedef struct {
 // Stores information for a batch of samples.
 typedef struct {
     mnist_image_t* images;
-    unsigned char* labels;
+    uint32_t* labels;
     size_t size;
 } mnist_batch_t;
 
@@ -100,11 +100,15 @@ int mnist_get_next_batch(mnist_batch_t* batch, mnist_dataset_t* dataset) {
         return 1;
     }
 
-    if (fread(batch->labels, 1, n_samples, dataset->images) != n_samples) {
+    uint8_t temp_labels[MNIST_LABELS * batch->size];
+    if (fread(temp_labels, 1, n_samples, dataset->images) != n_samples) {
         fprintf(stderr, "Failed to read label data!\n");
         return 2;
     }
-    printf("label: %hhu\n", batch->labels[0]);
+
+    for (size_t i = 0; i < n_samples; i++) {
+        batch->labels[i] = (uint32_t) temp_labels[i];
+    }
 
     return 0;
 }

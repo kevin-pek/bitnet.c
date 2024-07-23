@@ -20,7 +20,7 @@ static inline float mean(const float* x, size_t len) {
 }
 
 
-// Return a random float [0, 1)
+// Return a random float (0, 1)
 static inline float rand_float() {
     return (float) rand() / ((float) RAND_MAX + 1.0f);
 }
@@ -29,7 +29,7 @@ static inline float rand_float() {
 // Sample from standard normal distribution N(0,1)
 // µ + εσ = 0 + z * 1
 static inline float std_norm() {
-    return sqrtf(-2.0f * logf(rand_float()) * cosf(2.0f * PI * rand_float()));
+    return sqrtf(-2.0f * logf(rand_float())) * cosf(2.0f * PI * rand_float());
 }
 
 
@@ -178,12 +178,12 @@ void mat_init_rand(float* x, size_t len) {
 }
 
 
-void print_mat(float* mat, size_t rows, size_t cols) {
+void print_mat(const float* mat, size_t rows, size_t cols) {
     printf("[\n");
     for (size_t i = 0; i < rows; i++) {
         printf("\t[");
         for (size_t j = 0; j < cols; j++) {
-            printf("%.3f,", mat[i * cols + j]);
+            printf("%.2f,", mat[i * cols + j]);
         }
         printf("]");
         printf("\n");

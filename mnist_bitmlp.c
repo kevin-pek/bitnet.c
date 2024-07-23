@@ -8,11 +8,10 @@
 #include "layers/bitlinear.h"
 #include "layers/mlp.h"
 #include "utils/loss.h"
-#include "utils/matrix.h"
 #include "utils/mnist.h"
 #include "utils/optim.h"
 
-#define BATCH_SIZE 64
+#define BATCH_SIZE 1
 #define HIDDEN_SIZE 32
 #define EPOCHS 10
 #define LR 1e-4
@@ -67,15 +66,13 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
     bitmlp_mem_t* mem = model->mem;
     bitmlp_grad_t* grads = model->grads;
     bitmlp_t* params = model->params;
-    uint32_t labels[batch->size];
 
     // cast uint8 inputs to float to work with our MLP implementation
-    for (int i = 0; i < batch->size; i++) {
-        for (int j = 0; j < model->d; j++) {
-            int idx = i * model->d + j;
+    for (size_t i = 0; i < batch->size; i++) {
+        for (size_t j = 0; j < model->d; j++) {
+            size_t idx = i * model->d + j;
             mem->lin1.x[idx] = (float) batch->images[i].pixels[j];
         }
-        labels[i] = (uint32_t) batch->labels[i];
     }
 
     mlp_fwd(
@@ -100,16 +97,18 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
         model->o,
         batch->size
     );
+
     printf("MLP Logits:\n");
-    print_mat(mem->logits, model->d, batch->size);
+    print_mat(mem->logits, batch->size, model->o);
+
     softmax_fwd(mem->probs, mem->logits, model->d, batch->size);
-    float loss = crossentropy_fwd(mem->probs, labels, model->o, batch->size);
+    float loss = crossentropy_fwd(mem->probs, batch->labels, model->o, batch->size);
     printf("Training loss: %.4f\n", loss); // loss is only used for logging
 
     zero_grad(model, batch->size);
 
     // float* dloss = {1 / (batch->size)}; // gradient of loss is fixed as 1 / batch_size
-    crossentropy_bkwd(grads->dy, mem->probs, labels, model->o, batch->size);
+    crossentropy_bkwd(grads->dy, mem->probs, batch->labels, model->o, batch->size);
     float* dloss = mem->logits; // reuse memory for logits to propagate gradients for loss
     softmax_bkwd(dloss, mem->probs, grads->dy, model->d, batch->size);
     mlp_bkwd(
@@ -139,7 +138,6 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
 void validation_step(bitmlp_config_t* model, mnist_batch_t* batch, classifier_metrics_t* metrics) {
     bitmlp_mem_t* mem = model->mem;
     bitmlp_t* params = model->params;
-    uint32_t labels[batch->size];
 
     // cast uint8 inputs to float to work with our MLP implementation
     for (int i = 0; i < batch->size; i++) {
@@ -147,7 +145,6 @@ void validation_step(bitmlp_config_t* model, mnist_batch_t* batch, classifier_me
             int idx = i * model->d + j;
             mem->lin1.x[idx] = (float) batch->images[i].pixels[j];
         }
-        labels[i] = (uint32_t) batch->labels[i];
     }
 
     mlp_fwd(
@@ -205,6 +202,8 @@ int main() {
     bitmlp_mem_t mem;
     bitmlp_grad_t grads;
     bitmlp_config_t model = {
+        .mem = &mem,
+        .grads = &grads,
         .params = &mlp,
         .d = MNIST_IMAGE_SIZE,
         .h = HIDDEN_SIZE,
@@ -215,7 +214,7 @@ int main() {
     batch.images = (mnist_image_t*) calloc(batch.size, sizeof(mnist_image_t));
     if (batch.images == NULL) { exit_code = 3; goto cleanup; }
 
-    batch.labels = (uint8_t*) calloc(batch.size, sizeof(uint8_t));
+    batch.labels = (uint32_t*) calloc(batch.size, sizeof(uint32_t));
     if (batch.labels == NULL) { exit_code = 4; goto cleanup; }
 
     // Allocate memory for MLP training params and intermediate results
