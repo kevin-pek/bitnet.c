@@ -102,13 +102,13 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
     print_mat(mem->logits, batch->size, model->o);
 
     softmax_fwd(mem->probs, mem->logits, model->o, batch->size);
-    float loss = crossentropy_fwd(mem->probs, batch->labels, model->o, batch->size);
+
+    float loss = cross_entropy_loss(mem->probs, batch->labels, model->o, batch->size);
     printf("Training loss: %.4f\n", loss); // loss is only used for logging
 
     zero_grad(model, batch->size);
 
     // float* dloss = {1 / (batch->size)}; // gradient of loss is fixed as 1 / batch_size
-    crossentropy_bkwd(grads->dy, mem->probs, batch->labels, model->o, batch->size);
     float* dloss = mem->logits; // reuse memory for logits to propagate gradients for loss
     softmax_bkwd(dloss, mem->probs, grads->dy, model->d, batch->size);
     mlp_bkwd(

@@ -2,11 +2,11 @@
 #define LOSS_H
 
 #include <math.h>
+#include <stdint.h>
 
-#define CROSSENTROPY_EPS 1e-5f
 
-
-inline float log_sum_exp(const float* logits, size_t dim) {
+// Compute log-sum-exp of a float array.
+float log_sum_exp(const float* logits, size_t dim) {
     float max_logit = logits[0];
     for (size_t i = 1; i < dim; i++)
         if (logits[i] > max_logit)
@@ -31,34 +31,15 @@ inline float log_sum_exp(const float* logits, size_t dim) {
  * @param batch_size
  * @return crossentropy loss value
  */
-float crossentropy_fwd(const float* logits, const uint32_t* targets, size_t n_labels, size_t batch_size) {
+float cross_entropy_loss(const float* logits, const uint32_t* targets, size_t n_labels, size_t batch_size) {
     float loss = 0.0f;
     for (size_t b = 0; b < batch_size; b++) {
-        for (size_t i = 0; i < n_labels; i++) {
-            loss -= logf(fmaxf(probs[targets[i]], CROSSENTROPY_EPS));
-        }
-    }
-    return loss / (n_labels * batch_size);
-}
+        const float* logits_b = logits + b * n_labels;
 
-
-/**
- * @brief Compute gradient of logits using gradient of loss, prediction probability
- *        and target id. Gradient of logit is given by p_i - y_i.
- * 
- * @param dloss gradients of inputs wrt loss
- * @param probs output probabilities
- * @param targets list of class labels for current batch
- * @param n_labels output dimension of model, corresponds to the number of classes
- * @param batch_size
- */
-void crossentropy_bkwd(float* dloss, const float* probs, const uint32_t* targets, size_t n_labels, size_t batch_size) {
-    for (size_t b = 0; b < batch_size; b++) {
-        for (size_t i = 0; i < n_labels; i++) {
-            float y_i = i == targets[b] ? 1.0f : 0.0f;
-            dloss[i] = probs[i] - y_i;
-        }
+        float lse = log_sum_exp(logits_b, n_labels);
+        loss -= logits_b[targets[b]] - lse;
     }
+    return loss / batch_size;
 }
 
 #endif
