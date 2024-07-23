@@ -11,11 +11,11 @@
 #include "utils/mnist.h"
 #include "utils/optim.h"
 
-#define BATCH_SIZE 1
-#define HIDDEN_SIZE 32
+#define BATCH_SIZE 64
+#define HIDDEN_SIZE 64
 #define EPOCHS 10
-#define LR 1e-4
-#define EPS 1e-8
+#define LR 1e-5f
+#define EPS 1e-8f
 #define BETA1 0.9f
 #define BETA2 0.999f
 #define WEIGHT_DECAY 1e-2f
@@ -42,10 +42,13 @@ int save_weights(bitmlp_config_t* model, const char* filepath) {
         return 1;
     }
 
-    // write magic numbers to store model information
-    fwrite(&model->d, sizeof(int), 1, fp);
-    fwrite(&model->h, sizeof(int), 1, fp);
-    fwrite(&model->o, sizeof(int), 1, fp);
+    // write 32 bit integers to store model information
+    uint32_t d = (uint32_t) model->d;
+    uint32_t h = (uint32_t) model->h;
+    uint32_t o = (uint32_t) model->o;
+    fwrite(&d, sizeof(uint32_t), 1, fp);
+    fwrite(&h, sizeof(uint32_t), 1, fp);
+    fwrite(&o, sizeof(uint32_t), 1, fp);
     bitlinear_save_weights(&model->params->lin1, &model->mem->lin1, model->d, model->h, fp);
     bitlinear_save_weights(&model->params->lin2, &model->mem->lin2, model->h, model->o, fp);
 
@@ -98,8 +101,8 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
         batch->size
     );
 
-    printf("MLP Logits:\n");
-    print_mat(mem->logits, batch->size, model->o);
+    // printf("MLP Logits:\n");
+    // print_mat(mem->logits, batch->size, model->o);
 
     softmax_fwd(mem->probs, mem->logits, model->o, batch->size);
 
@@ -112,12 +115,13 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
     float* dloss = mem->logits; // reuse memory for logits to propagate gradients for loss
     softmax_bkwd(dloss, mem->probs, batch->labels, model->o, batch->size);
     mlp_bkwd(
-        dloss,
+        mem->dx, // propagate gradients to here since we no longer need it
         grads->lin1.dw,
         grads->lin2.dw,
         grads->lin1.dg,
         grads->lin2.dg,
-        grads->dy,
+        mem->dy_hidden,
+        dloss,
         mem->lin2.x,
         mem->lin2.w,
         params->lin2.g,
@@ -217,40 +221,22 @@ int main() {
     batch.labels = (uint32_t*) calloc(batch.size, sizeof(uint32_t));
     if (batch.labels == NULL) { exit_code = 4; goto cleanup; }
 
-    // Allocate memory for MLP training params and intermediate results
-    size_t n_params = bitlinear_train_params(model.d, model.h) + model.h + bitlinear_train_params(model.h, model.o) + 2 * model.o;
+    // Allocate memory for MLP training params
+    size_t n_params = bitlinear_grad_params(model.d, model.h) + bitlinear_grad_params(model.h, model.o);
     float* params = (float*) calloc(batch.size * n_params, sizeof(float));
     if (params == NULL) { exit_code = 5; goto cleanup; }
 
     // Assign pointers for model parameters and intermediate values to contiguous memory block
     float* arr_ptr = params;
-    mem.lin1.x = arr_ptr;
-    arr_ptr += batch.size * model.d;
     mlp.lin1.g = arr_ptr;
-    arr_ptr += batch.size * model.d;
-    mem.lin1.y_rms = arr_ptr;
     arr_ptr += batch.size * model.d;
     mem.lin1.w = arr_ptr;
     arr_ptr += batch.size * model.d * model.h;
-
-    mem.x_gelu = arr_ptr;
-    arr_ptr += batch.size * model.h;
-
-    mem.lin2.x = arr_ptr;
-    arr_ptr += batch.size * model.h;
     mlp.lin2.g = arr_ptr;
     arr_ptr += batch.size * model.h;
-    mem.lin2.y_rms = arr_ptr;
-    arr_ptr += batch.size * model.h;
     mem.lin2.w = arr_ptr;
-    arr_ptr += batch.size * model.h * model.o;
 
-    mem.logits = arr_ptr;
-    arr_ptr += batch.size * model.o;
-    mem.probs = arr_ptr;
-
-    size_t n_grads = bitlinear_grad_params(model.d, model.h) + bitlinear_grad_params(model.h, model.o);
-    float* grad_params = (float*) calloc(batch.size * n_grads, sizeof(float));
+    float* grad_params = (float*) calloc(batch.size * n_params, sizeof(float));
     if (grad_params == NULL) { exit_code = 6; goto cleanup; }
 
     // Assign pointers for gradients to contiguous memory block
@@ -262,17 +248,19 @@ int main() {
     grads.lin2.dg = arr_ptr;
     arr_ptr += batch.size * model.d;
     grads.lin2.dw = arr_ptr;
-    arr_ptr += batch.size * model.d * model.h;
 
     // verify this is correct size
     uint8_t* uint8_params = (uint8_t*) calloc(batch.size * (((model.d + 7) / 8) * model.h + ((model.h + 7) / 8) * model.o), sizeof(uint8_t));
+    if (uint8_params == NULL) { exit_code = 7; goto cleanup; }
+
     uint8_t* uint8_ptr = uint8_params;
     mlp.lin1.wq = uint8_ptr;
     uint8_ptr += batch.size * ((model.d + 7) / 8) * model.h;
     mlp.lin2.wq = uint8_ptr;
 
-    int8_t* int8_params = (int8_t*) calloc(batch.size * 2 * model.d * model.o, sizeof(int8_t));
-    if (int8_params == NULL) { exit_code = 7; goto cleanup; }
+    int8_t* int8_params = (int8_t*) calloc(batch.size * 2 * (model.d + model.o), sizeof(int8_t));
+    if (int8_params == NULL) { exit_code = 8; goto cleanup; }
+
     int8_t* int8_ptr = int8_params;
     mlp.lin1.yq = int8_ptr;
     int8_ptr += batch.size * model.d;
@@ -282,18 +270,43 @@ int main() {
     int8_ptr += batch.size * model.o;
     mlp.lin2.xq = int8_ptr;
 
+    // Allocate memory for storing intermediate results
+    size_t n_mems = 3 * model.d + 4 * model.h + 2 * model.o;
+    float* mem_params = (float*) calloc(batch.size * n_mems, sizeof(float));
+    if (params == NULL) { exit_code = 9; goto cleanup; }
+
+    float* mem_ptr = mem_params;
+    mem.dx = mem_ptr;
+    mem_ptr += batch.size * model.d;
+    mem.lin1.x = arr_ptr;
+    arr_ptr += batch.size * model.d;
+    mem.lin1.y_rms = arr_ptr;
+    arr_ptr += batch.size * model.d;
+    mem.x_gelu = arr_ptr;
+    arr_ptr += batch.size * model.h;
+    mem.dy_hidden = arr_ptr;
+    arr_ptr += batch.size * model.h;
+    mem.lin2.x = arr_ptr;
+    arr_ptr += batch.size * model.h;
+    mem.lin2.y_rms = arr_ptr;
+    arr_ptr += batch.size * model.h;
+    mem.logits = arr_ptr;
+    arr_ptr += batch.size * model.o;
+    mem.probs = arr_ptr;
+
     // Initialize training parameters
     mlp_init(&mlp, &mem, model.d, model.h, model.o, batch.size);
 
     adamw_t optim;
-    if (adamw_alloc(&optim, n_grads) != 0) {
-        exit_code = 7;
+    if (adamw_alloc(&optim, n_params) != 0) {
+        exit_code = 10;
         goto cleanup;
     }
     adamw_init(&optim, LR, BETA1, BETA2, EPS, WEIGHT_DECAY);
 
     for (int i = 0; i < EPOCHS; i++) {
         while (mnist_get_next_batch(&batch, trainset) == 0) {
+            printf("Epoch: %d ", i);
             training_step(&model, &batch);
             adamw_update(&optim, params, grad_params, i + 1);
         }

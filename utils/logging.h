@@ -19,4 +19,33 @@ inline void printbin32(uint32_t num) {
     }
 }
 
+void print_mat(const float* mat, size_t rows, size_t cols) {
+    printf("[\n");
+    for (size_t i = 0; i < rows; i++) {
+        printf("\t[");
+        for (size_t j = 0; j < cols; j++) {
+            printf("%.2f,", mat[i * cols + j]);
+        }
+        printf("]");
+        printf("\n");
+    }
+    printf("]\n");
+}
+
+
+// Print 8 bit quantised matrix in binary.
+void print_qmat(int8_t* mat, size_t rows, size_t cols) {
+    printf("[\n");
+    for (size_t i = 0; i < rows; i++) {
+        printf("\t[");
+        for (size_t j = 0; j < cols; j++) {
+            printf("%4d,", mat[i * cols + j]);
+        }
+        printf("]");
+        printf("\n");
+    }
+    printf("]\n");
+}
+
+
 #endif

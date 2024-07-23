@@ -29,8 +29,8 @@ static inline float rmsnorm_inv(const float* x, size_t len) {
  * @param batch_size
  */
 void rmsnorm_fwd(float* y, const float* x, const float* g, size_t dim, size_t batch_size) {
-    printf("RMSNorm inputs:\n");
-    print_mat(x, batch_size, dim);
+    // printf("RMSNorm inputs:\n");
+    // print_mat(x, batch_size, dim);
 
     for (size_t b = 0; b < batch_size; b++) {
         const float* x_b = x + b * dim;
@@ -42,8 +42,8 @@ void rmsnorm_fwd(float* y, const float* x, const float* g, size_t dim, size_t ba
         }
     }
 
-    printf("RMSNorm outputs:\n");
-    print_mat(y, batch_size, dim);
+    // printf("RMSNorm outputs:\n");
+    // print_mat(y, batch_size, dim);
 }
 
 

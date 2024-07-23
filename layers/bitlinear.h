@@ -36,12 +36,6 @@ void bitlinear_init(bitlinear_t* bitlin, bitlinear_mem_t* mem, size_t in_dim, si
 }
 
 
-// Return number of training parameters for bitlinear layer.
-size_t bitlinear_train_params(size_t in_dim, size_t out_dim) {
-    return 3 * in_dim + 2 * (in_dim * out_dim);
-}
-
-
 // Return number of gradient parameters for training bitlinear layer.
 size_t bitlinear_grad_params(size_t in_dim, size_t out_dim) {
     return in_dim + in_dim * out_dim;
@@ -193,8 +187,8 @@ void bitlinear_fwd(float* y, float* rms,
                    const float* x, const float* w, const float* g,
                    uint8_t* wq, int8_t* yq, int8_t* xq,
                    size_t in_dim, size_t out_dim, size_t batch_size) {
-    printf("Bitlinear inputs:\n");
-    print_mat(x, batch_size, in_dim);
+    // printf("Bitlinear inputs:\n");
+    // print_mat(x, batch_size, in_dim);
 
     rmsnorm_fwd(rms, x, g, in_dim, batch_size);
 
@@ -211,8 +205,8 @@ void bitlinear_fwd(float* y, float* rms,
         activation_dequant(y_b, yq_b, beta, scale, out_dim);
     }
 
-    printf("Bitlinear outputs:\n");
-    print_mat(y, batch_size, out_dim);
+    // printf("Bitlinear outputs:\n");
+    // print_mat(y, batch_size, out_dim);
 }
 
 
@@ -220,7 +214,7 @@ void bitlinear_fwd(float* y, float* rms,
  * @brief Compute gradients for BitLinear layer and its RMSNorm weights.
  *
  * @param dx      gradient of input
- * @param dw      gradient of bit matrix weigths
+ * @param dw      gradient of bit matrix weights
  * @param dg      gradient of rmsnorm scaling factors
  * @param dy      gradient of loss wrt output of this layer
  * @param x       input to bitlinear layer
@@ -233,7 +227,7 @@ void bitlinear_fwd(float* y, float* rms,
  */
 void bitlinear_bkwd(float* dx, float* dw, float* dg,
                     const float* dy, const float* x, const float* w, const float* g, const float* y_rms,
-                    int in_dim, int out_dim, int batch_size) {
+                    size_t in_dim, size_t out_dim, size_t batch_size) {
     matmul_bkwd(dw, dx, dy, w, y_rms, out_dim, in_dim, batch_size);
     rmsnorm_bkwd(dg, dx, dx, x, g, in_dim, batch_size);
 }

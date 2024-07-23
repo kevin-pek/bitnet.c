@@ -27,8 +27,8 @@ void softmax_fwd(float* probs, const float* logits, size_t dim, size_t batch_siz
         for (size_t i = 0; i < dim; i++)
             probs_b[i] = expf(logits_b[i] - lse);
     }
-    printf("Softmax probas:\n");
-    print_mat(probs, batch_size, dim);
+    // printf("Softmax probas:\n");
+    // print_mat(probs, batch_size, dim);
 }
 
 
@@ -50,8 +50,8 @@ void softmax_bkwd(float* dloss, const float* probs, const uint32_t* targets, siz
         for (size_t i = 0; i < dim; i++)
             dloss_b[i] = probs_b[i] - (i == targets[b] ? 1.0f : 0.0f);
     }
-    printf("Softmax gradients:\n");
-    print_mat(dloss, batch_size, dim);
+    // printf("Softmax gradients:\n");
+    // print_mat(dloss, batch_size, dim);
 }
 
 

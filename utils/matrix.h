@@ -1,12 +1,12 @@
 #ifndef MATRIX_H
 #define MATRIX_H
 
-#include "logging.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "logging.h"
 
 #define PI 3.1415927f // max precision of π for 32 bit floating point numbers
 
@@ -60,6 +60,7 @@ void matmul_fwd(float* y, const float* x, const float* w, size_t n, size_t m, si
  *        quantized weight matrices.  y = Wx, where W (n, m), x (m, b)
  *        We assume that m is multiple of 8 which is fine since dims are
  *        large powers of 2 by convention.
+ *
  * @param yq 8 bit quantised outputs
  * @param xq 8 bit quantised inputs
  * @param wq 1 bit quantised weight matrix
@@ -111,12 +112,20 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
  * @param w  full precision weights of BitLinear layer
  * @param x  input activations to bitlinear layer
  * @param n  output dim, num rows in weight matrix
- * @param m  embedding dim, num cols in weight matrix/rows in activation x
+ * @param m  input dim, num cols in weight matrix/rows in activation x
  * @param b  batch size, num cols in matrix x
  */
 void matmul_bkwd(float* dw, float* dx,
                  const float* dy, const float* w, const float* x,
                  size_t n, size_t m, size_t b) {
+    // printf("Matmul backprop:\n");
+    // printf("dW:");
+    // print_mat(dw, n, m);
+    // printf("dx:");
+    // print_mat(dx, m, b);
+    // printf("dy:");
+    // print_mat(dy, b, m);
+
     for (size_t i = 0; i < n; i++) {
         for (size_t k = 0; k < m; k++) {
             for (size_t j = 0; j < b; j++) {
@@ -127,6 +136,8 @@ void matmul_bkwd(float* dw, float* dx,
             }
         }
     }
+
+    // printf("Matmul backprop done\n");
 }
 
 
@@ -175,35 +186,6 @@ void mat_init_kaiming(float* x, size_t len) {
  */
 void mat_init_rand(float* x, size_t len) {
     for (size_t i = 0; i < len; i++) x[i] = rand_float();
-}
-
-
-void print_mat(const float* mat, size_t rows, size_t cols) {
-    printf("[\n");
-    for (size_t i = 0; i < rows; i++) {
-        printf("\t[");
-        for (size_t j = 0; j < cols; j++) {
-            printf("%.2f,", mat[i * cols + j]);
-        }
-        printf("]");
-        printf("\n");
-    }
-    printf("]\n");
-}
-
-
-// Print 8 bit quantised matrix in binary.
-void print_qmat(int8_t* mat, size_t rows, size_t cols) {
-    printf("[\n");
-    for (size_t i = 0; i < rows; i++) {
-        printf("\t[");
-        for (size_t j = 0; j < cols; j++) {
-            printf("%4d,", mat[i * cols + j]);
-        }
-        printf("]");
-        printf("\n");
-    }
-    printf("]\n");
 }
 
 #endif
