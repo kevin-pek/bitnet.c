@@ -30,9 +30,9 @@ typedef struct {
 
 
 // Initialize values for training parameters for matrix.
-void bitlinear_init(bitlinear_t* bitlin, bitlinear_mem_t* mem, size_t in_dim, size_t out_dim, size_t batch_size) {
-    mat_init_kaiming(bitlin->g, in_dim * batch_size);
-    mat_init_kaiming(mem->w, in_dim * out_dim * batch_size);
+void bitlinear_init(bitlinear_t* bitlin, bitlinear_mem_t* mem, size_t in_dim, size_t out_dim) {
+    mat_init_kaiming(bitlin->g, in_dim);
+    mat_init_kaiming(mem->w, in_dim * out_dim);
 }
 
 

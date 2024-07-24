@@ -24,7 +24,7 @@ void print_mat(const float* mat, size_t rows, size_t cols) {
     for (size_t i = 0; i < rows; i++) {
         printf("\t[");
         for (size_t j = 0; j < cols; j++) {
-            printf("%.2f,", mat[i * cols + j]);
+            printf("%.2f, ", mat[i * cols + j]);
         }
         printf("]");
         printf("\n");
@@ -39,7 +39,7 @@ void print_qmat(int8_t* mat, size_t rows, size_t cols) {
     for (size_t i = 0; i < rows; i++) {
         printf("\t[");
         for (size_t j = 0; j < cols; j++) {
-            printf("%4d,", mat[i * cols + j]);
+            printf("%4d, ", mat[i * cols + j]);
         }
         printf("]");
         printf("\n");

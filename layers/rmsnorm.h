@@ -5,8 +5,9 @@
 #include <math.h>
 #include "../utils/matrix.h"
 
-#define RMSNORM_EPS 1e-5f
-
+#define RMSNORM_EPS 1e-8f
+#define MAX_RMS_INV 1e3f
+#define CLIP_RMS_GRAD 1e3f
 
 // Compute 1 / RMS using an array of given length.
 static inline float rmsnorm_inv(const float* x, size_t len) {
@@ -15,6 +16,8 @@ static inline float rmsnorm_inv(const float* x, size_t len) {
         ss += x[i] * x[i];
     ss /= len;
     ss = 1.0f / (sqrtf(ss) + RMSNORM_EPS);
+    if (ss > MAX_RMS_INV) ss = MAX_RMS_INV; // clip values for numerical stability
+    if (isnan(ss)) ss = 0.0f;
     return ss;
 }
 
@@ -35,11 +38,17 @@ void rmsnorm_fwd(float* y, const float* x, const float* g, size_t dim, size_t ba
 #endif
     for (size_t b = 0; b < batch_size; b++) {
         const float* x_b = x + b * dim;
-        const float* g_b = g + b * dim;
         float* y_b = y + b * dim;
         float rms_inv = rmsnorm_inv(x_b, dim);
+        #ifdef DEBUG_RMS
+            printf("RMS inverse: %.4f\n", rms_inv);
+            printf("RMS g\n");
+            print_mat(g, 1, dim);
+            printf("RMS x_b\n");
+            print_mat(x_b, 1, dim);
+        #endif
         for (size_t i = 0; i < dim; i++) {
-            y_b[i] = g_b[i] * rms_inv * x_b[i];
+            y_b[i] = g[i] * rms_inv * x_b[i];
         }
     }
 #ifdef DEBUG
@@ -65,21 +74,56 @@ void rmsnorm_bkwd(float* dg, float* dx,
                   size_t dim, size_t batch_size) {
     for (size_t b = 0; b < batch_size; b++) {
         const float* x_b = x + b * dim;
-        const float* g_b = g + b * dim;
         const float* dy_b = dy + b * dim;
         float* dx_b = dx + b * dim;
-        float* dg_b = dg + b * dim;
         float rms_inv = rmsnorm_inv(x_b, dim); // 1 / RMS(x)
+        #ifdef DEBUG_RMS
+            printf("RMS inverse: %.4f\n", rms_inv);
+        #endif
         for (size_t i = 0; i < dim; i++) {
-            dg_b[i] = dy_b[i] * x_b[i] * rms_inv; // dL / dg_i
+            dg[i] += dy_b[i] * x_b[i] * rms_inv; // dL / dg_i
             for (size_t j = 0; j < dim; j++) { // dL / dx_i
                 if (i == j)
-                    dx_b[i] += dy_b[j] * g_b[j] * rms_inv * (1 - rms_inv * x_b[i] * x_b[i] / dim);
+                    dx_b[i] += dy_b[j] * g[j] * rms_inv * (1 - rms_inv * x_b[i] * x_b[i] / dim);
                 else
-                    dx_b[i] -= g_b[j] * x_b[i] * x_b[j] * rms_inv * rms_inv * rms_inv / dim;
+                    dx_b[i] -= g[j] * x_b[i] * x_b[j] * rms_inv * rms_inv * rms_inv / dim;
             }
         }
     }
+    #ifdef DEBUG_GRAD
+        // printf("RMS input gradients:\n");
+        // print_mat(dx, batch_size, dim);
+        printf("RMS intermediate gradients:\n");
+        print_mat(dg, 1, dim);
+    #endif
+    for (size_t i = 0; i < dim; i++) {
+        dg[i] /= batch_size;
+        // Check for NaN and clip gradients to avoid extreme values
+        if (isnan(dg[i])) dg[i] = 0.0f;
+        if (dg[i] > CLIP_RMS_GRAD) dg[i] = CLIP_RMS_GRAD;
+        if (dg[i] < -CLIP_RMS_GRAD) dg[i] = -CLIP_RMS_GRAD;
+    }
+    for (size_t b = 0; b < batch_size; b++) {
+        for (size_t i = 0; i < dim; i++) {
+            dx[b * dim + i] /= batch_size;
+            // Check for NaN and clip gradients to avoid extreme values
+            if (isnan(dx[b * dim + i])) dx[b * dim + i] = 0.0f;
+            if (dx[b * dim + i] > CLIP_RMS_GRAD) dx[b * dim + i] = CLIP_RMS_GRAD;
+            if (dx[b * dim + i] < -CLIP_RMS_GRAD) dx[b * dim + i] = -CLIP_RMS_GRAD;
+        }
+    }
+    // for (size_t i = 0; i < dim; i++) {
+    //     dg[i] /= batch_size;
+    //     for (size_t b = 0; b < batch_size; b++) {
+    //         dx[b * dim + i] /= batch_size;
+    //     }
+    // }
+#ifdef DEBUG_GRAD
+    printf("RMSNorm output gradients:\n");
+    print_mat(dg, 1, dim);
+    // printf("RMSNorm scaling factors:\n");
+    // print_mat(g, 1, dim);
+#endif
 }
 
 #endif

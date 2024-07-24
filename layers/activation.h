@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include "../utils/logging.h"
 #include "../utils/loss.h"
 #include "../utils/matrix.h"
 
@@ -92,6 +93,10 @@ void gelu_bkwd(float* dx, const float* dy, const float* in, size_t dim, size_t b
             dx[idx] = dy[idx] * dgelu;
         }
     }
+#ifdef DEBUG_GELU
+    printf("After - GELU gradient:\n");
+    print_mat(dx, batch_size, dim);
+#endif
 }
 
 #endif

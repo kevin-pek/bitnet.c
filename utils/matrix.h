@@ -72,14 +72,14 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
                    size_t n, size_t m, size_t b) {
     for (size_t i = 0; i < n; i++) {
         for (size_t j = 0; j < b; j++) {
-            #ifdef DEBUG
+            #ifdef VERBOSE_MAT
                 printf("Elem (%zu, %zu):\n", i, j);
             #endif
             const int8_t* xq_ptr = xq + j; // pointer to first row at our current column
             const uint8_t* wq_ptr = wq + i * ((m + 7) / 8); // pointer to start of row of weight matrix
             int32_t acc = 0; // accumulate results in larger int to prevent overflow
             for (size_t k = 0; k < m; k += 8) {
-                #ifdef DEBUG
+                #ifdef VERBOSE_MAT
                     printf("Byte: ");
                     printbin8(wq_ptr[k / 8]);
                     printf("\n");
@@ -117,26 +117,43 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
  */
 void matmul_bkwd(float* dw, float* dx,
                  const float* dy, const float* w, const float* x,
-                 size_t n, size_t m, size_t b) {
-#ifdef DEBUG
-    printf("Matmul backprop:\n");
+                 size_t out_dim, size_t in_dim, size_t batch_size) {
+#ifdef DEBUG_MAT
+    printf("Before matmul backprop:\n");
     printf("dW:");
-    print_mat(dw, n, m);
+    print_mat(dw, out_dim, in_dim);
     printf("dx:");
-    print_mat(dx, m, b);
+    print_mat(dx, in_dim, batch_size);
     printf("dy:");
-    print_mat(dy, b, m);
+    print_mat(dy, batch_size, in_dim);
 #endif
-    for (size_t i = 0; i < n; i++) {
-        for (size_t k = 0; k < m; k++) {
-            for (size_t j = 0; j < b; j++) {
-                // dw_ik = sum(dL / dy_ij * dx_kj), j in [1, b]
-                dw[i * m + k] += dy[i * b + j] * x[k * b + j];
-                // dx_kj = sum(dL / dy_ij * dy_ij / dx_ij), j in [1, b]
-                dx[k * b + j] += w[i * m + k] * dy[i * b + j];
+    // accumulate gradients from the batch
+    for (size_t b = 0; b < batch_size; b++) {
+        const float* dy_b = dy + b * out_dim;
+        const float* x_b = x + b * in_dim;
+        float* dx_b = dx + b * in_dim;
+        for (size_t j = 0; j < in_dim; j++) {
+            for (size_t i = 0; i < out_dim; i++) {
+                dw[i * in_dim + j] += dy_b[i] * x_b[j];
+                dx_b[j] += w[i * in_dim + j] * dy_b[i];
             }
         }
     }
+
+    // normalize gradients using batch size
+    for (size_t i = 0; i < in_dim; i++) {
+        dx[i] /= batch_size;
+        for (size_t j = 0; j < out_dim; j++) {
+            dw[i * in_dim + j] /= batch_size;
+        }
+    }
+#ifdef DEBUG_MAT
+    printf("After matmul backprop:\n");
+    printf("dW:");
+    print_mat(dw, out_dim, in_dim);
+    printf("dx:");
+    print_mat(dx, in_dim, batch_size);
+#endif
 }
 
 
@@ -170,6 +187,7 @@ void matadd_bkwd(float* dm1, float* dm2,
  *        forward pass, addressing the vanishing gradient problem. This is used
  *        instead of Xavier initialization since we are using GELU activations
  *        in our architecture.
+ *
  * @param x pointer to matrix
  * @param len length of matrix
  */
@@ -180,6 +198,7 @@ void mat_init_kaiming(float* x, size_t len) {
 
 /**
  * @brief Initialize the given matrix to random weights [0, 1).
+ *
  * @param x pointer to matrix
  * @param len length of matrix
  */

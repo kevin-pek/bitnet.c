@@ -7,14 +7,15 @@
 #include "layers/activation.h"
 #include "layers/bitlinear.h"
 #include "layers/mlp.h"
+#include "utils/logging.h"
 #include "utils/loss.h"
 #include "utils/mnist.h"
 #include "utils/optim.h"
 
-#define BATCH_SIZE 64
+#define BATCH_SIZE 32
 #define HIDDEN_SIZE 64
-#define EPOCHS 10
-#define LR 1e-5f
+#define EPOCHS 1
+#define LR 1e-3f
 #define EPS 1e-8f
 #define BETA1 0.9f
 #define BETA2 0.999f
@@ -51,16 +52,17 @@ int save_weights(bitmlp_config_t* model, const char* filepath) {
     fwrite(&o, sizeof(uint32_t), 1, fp);
     bitlinear_save_weights(&model->params->lin1, &model->mem->lin1, model->d, model->h, fp);
     bitlinear_save_weights(&model->params->lin2, &model->mem->lin2, model->h, model->o, fp);
+    fclose(fp);
 
     return 0;
 }
 
 
 void zero_grad(bitmlp_config_t* model, size_t b) {
-    memset(model->grads->lin1.dg, 0, sizeof(float) * b * model->d);
-    memset(model->grads->lin1.dw, 0, sizeof(float) * b * model->d * model->h);
-    memset(model->grads->lin2.dg, 0, sizeof(float) * b * model->h);
-    memset(model->grads->lin2.dw, 0, sizeof(float) * b * model->h * model->o);
+    memset(model->grads->lin1.dg, 0, sizeof(float) * model->d);
+    memset(model->grads->lin1.dw, 0, sizeof(float) * model->d * model->h);
+    memset(model->grads->lin2.dg, 0, sizeof(float) * model->h);
+    memset(model->grads->lin2.dw, 0, sizeof(float) * model->h * model->o);
 }
 
 
@@ -100,7 +102,6 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
         model->o,
         batch->size
     );
-
 #ifdef DEBUG
     printf("MLP Logits:\n");
     print_mat(mem->logits, batch->size, model->o);
@@ -146,9 +147,9 @@ void validation_step(bitmlp_config_t* model, mnist_batch_t* batch, classifier_me
     bitmlp_t* params = model->params;
 
     // cast uint8 inputs to float to work with our MLP implementation
-    for (int i = 0; i < batch->size; i++) {
-        for (int j = 0; j < model->d; j++) {
-            int idx = i * model->d + j;
+    for (size_t i = 0; i < batch->size; i++) {
+        for (size_t j = 0; j < model->d; j++) {
+            size_t idx = i * model->d + j;
             mem->lin1.x[idx] = (float) batch->images[i].pixels[j];
         }
     }
@@ -175,15 +176,15 @@ void validation_step(bitmlp_config_t* model, mnist_batch_t* batch, classifier_me
         model->o,
         batch->size
     );
-    softmax_fwd(mem->probs, mem->logits, model->d, batch->size);
+    softmax_fwd(mem->probs, mem->logits, model->o, batch->size);
 
     for (int b = 0; b < batch->size; b++) {
-        int pred = b * model->o;
+        uint32_t argmax = b * model->o;
         for (int i = 0; i < model->o; i++) {
-            if (mem->probs[b * model->o + i] > mem->probs[pred])
-                pred = b * model->o + i;
+            if (mem->probs[b * model->o + i] > mem->probs[argmax])
+                argmax = b * model->o + i;
         }
-        if (pred == batch->labels[b]) metrics->correct++;
+        if ((argmax % model->o) == batch->labels[b]) metrics->correct++;
         else metrics->wrong++;
     }
 }
@@ -193,8 +194,10 @@ int main() {
     int exit_code = 0;
     // load training images from MNIST dataset
     mnist_dataset_t* trainset = mnist_init_dataset(
-        "MNIST_ORG/train-images.idx3-ubyte",
-        "MNIST_ORG/train-labels.idx1-ubyte"
+        "MNIST_ORG/t10k-images.idx3-ubyte",
+        "MNIST_ORG/t10k-labels.idx1-ubyte"
+        // "MNIST_ORG/train-images.idx3-ubyte",
+        // "MNIST_ORG/train-labels.idx1-ubyte"
     );
     if (trainset == NULL) { exit_code = 1; goto cleanup; }
 
@@ -225,33 +228,32 @@ int main() {
 
     // Allocate memory for MLP training params
     size_t n_params = model.d + model.d * model.h + model.h + model.h * model.o;
-    float* params = (float*) calloc(batch.size * n_params, sizeof(float));
+    float* params = (float*) calloc(n_params, sizeof(float));
     if (params == NULL) { exit_code = 5; goto cleanup; }
 
     // Assign pointers for model parameters and intermediate values to contiguous memory block
     float* arr_ptr = params;
     mlp.lin1.g = arr_ptr;
-    arr_ptr += batch.size * model.d;
+    arr_ptr += model.d;
     mem.lin1.w = arr_ptr;
-    arr_ptr += batch.size * model.d * model.h;
+    arr_ptr += model.d * model.h;
     mlp.lin2.g = arr_ptr;
-    arr_ptr += batch.size * model.h;
+    arr_ptr += model.h;
     mem.lin2.w = arr_ptr;
 
-    float* grad_params = (float*) calloc(batch.size * n_params, sizeof(float));
+    float* grad_params = (float*) calloc(n_params, sizeof(float));
     if (grad_params == NULL) { exit_code = 6; goto cleanup; }
 
     // Assign pointers for gradients to contiguous memory block
     arr_ptr = grad_params;
     grads.lin1.dg = arr_ptr;
-    arr_ptr += batch.size * model.d;
+    arr_ptr += model.d;
     grads.lin1.dw = arr_ptr;
-    arr_ptr += batch.size * model.d * model.h;
+    arr_ptr += model.d * model.h;
     grads.lin2.dg = arr_ptr;
-    arr_ptr += batch.size * model.d;
+    arr_ptr += model.d;
     grads.lin2.dw = arr_ptr;
 
-    // verify this is correct size
     uint8_t* uint8_params = (uint8_t*) calloc(batch.size * (((model.d + 7) / 8) * model.h + ((model.h + 7) / 8) * model.o), sizeof(uint8_t));
     if (uint8_params == NULL) { exit_code = 7; goto cleanup; }
 
@@ -297,7 +299,7 @@ int main() {
     mem.probs = mem_ptr;
 
     // Initialize training parameters
-    mlp_init(&mlp, &mem, model.d, model.h, model.o, batch.size);
+    mlp_init(&mlp, &mem, model.d, model.h, model.o);
 
     adamw_t optim;
     if (adamw_alloc(&optim, n_params) != 0) {
@@ -306,23 +308,51 @@ int main() {
     }
     adamw_init(&optim, LR, BETA1, BETA2, EPS, WEIGHT_DECAY);
 
+    classifier_metrics_t metrics = {0};
+    while (mnist_get_next_batch(&batch, testset) == 0)
+        validation_step(&model, &batch, &metrics);
+    printf("Zero-shot Accuracy: %.4f (%d / %d)\n", (float) metrics.correct / (float) (metrics.wrong + metrics.correct), metrics.correct, metrics.correct + metrics.wrong);
+    mnist_reset_dataset(testset);
+    batch.size = BATCH_SIZE;
+
     for (int i = 0; i < EPOCHS; i++) {
+        int j = 0;
         while (mnist_get_next_batch(&batch, trainset) == 0) {
-            printf("Epoch: %d ", i);
+            printf("Epoch: %d, Batch %d, ", i, j++);
+#ifdef VERBOSE
+            printf("Labels: [");
+            for (int k = 0; k < batch.size; k++)
+                printf("%u, ", batch.labels[k]);
+            printf("], ");
+#endif
             training_step(&model, &batch);
             adamw_update(&optim, params, grad_params, i + 1);
+            #ifdef DEBUG
+                // printf("Params after update:\n");
+                // printf("RMS1:\n");
+                // print_mat(model.params->lin1.g, model.h, model.d);
+                if (j == 4) {
+                    printf("DEBUG: Skipping to cleanup\n");
+                    goto cleanup;
+                }
+            #endif
         }
+        printf("Final gradients:\n");
+        print_mat(model.grads->lin1.dg, 1, model.d);
+        // print_mat(model.grads->lin1.dw, model.h, model.d);
+        print_mat(model.grads->lin2.dg, 1, model.h);
+        print_mat(model.grads->lin2.dw, model.h, model.o);
         mnist_reset_dataset(trainset);
         batch.size = BATCH_SIZE; // reset batch size in case last batch set it lower
     }
 
-    classifier_metrics_t metrics = {0};
-    while (mnist_get_next_batch(&batch, testset) == 0) {
+    metrics.wrong = 0;
+    metrics.correct = 0;
+    while (mnist_get_next_batch(&batch, testset) == 0)
         validation_step(&model, &batch, &metrics);
-    }
-    printf("Accuracy: %.4f (%d / %d)", (float) metrics.correct / (float) (metrics.wrong + metrics.correct), metrics.correct, metrics.correct + metrics.wrong);
+    printf("Validation Accuracy: %.4f (%d / %d)\n", (float) metrics.correct / (float) (metrics.wrong + metrics.correct), metrics.correct, metrics.correct + metrics.wrong);
 
-    save_weights(&model, "output/mnist_bitmlp.bin");
+    save_weights(&model, "mnist_bitmlp.bin");
 
 cleanup:
     if (exit_code != 0) {
@@ -331,11 +361,12 @@ cleanup:
     adamw_free(&optim);
     free(params);
     free(grad_params);
+    free(mem_params);
+    free(uint8_params);
+    free(int8_params);
     if (trainset) mnist_free_dataset(trainset);
     if (testset) mnist_free_dataset(testset);
     mnist_batch_free(&batch);
-    if (model.mem->logits) free(model.mem->logits);
-    if (model.mem->probs) free(model.mem->probs);
 
     return 0;
 }

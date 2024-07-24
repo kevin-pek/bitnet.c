@@ -94,20 +94,25 @@ int mnist_get_next_batch(mnist_batch_t* batch, mnist_dataset_t* dataset) {
         n_samples = dataset->size - dataset->idx;
     }
 
+    if (n_samples == 0) {
+        return 1;
+    }
+
     size_t bytes_read = fread(batch->images, sizeof(mnist_image_t), n_samples, dataset->images);
     if (bytes_read != n_samples) {
-        return 1;
+        return 2;
     }
 
     uint8_t temp_labels[n_samples];
     if (fread(temp_labels, sizeof(uint8_t), n_samples, dataset->labels) != n_samples) {
-        return 2;
+        return 3;
     }
 
     for (size_t i = 0; i < n_samples; i++) {
         batch->labels[i] = (uint32_t) temp_labels[i];
     }
     batch->size = n_samples;
+    dataset->idx += n_samples;
 
     return 0;
 }

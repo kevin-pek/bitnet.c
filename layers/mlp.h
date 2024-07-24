@@ -75,11 +75,10 @@ int mlp_alloc(bitmlp_t* mlp, size_t in_dim, size_t hidden_dim, size_t out_dim, s
  * @param d input dimension
  * @param h hidden dimension
  * @param o output dimension
- * @param b batch size
  */
-void mlp_init(bitmlp_t* mlp, bitmlp_mem_t* mem, size_t d, size_t h, size_t o, size_t b) {
-    bitlinear_init(&mlp->lin1, &mem->lin1, d, h, b);
-    bitlinear_init(&mlp->lin2, &mem->lin2, h, o, b);
+void mlp_init(bitmlp_t* mlp, bitmlp_mem_t* mem, size_t d, size_t h, size_t o) {
+    bitlinear_init(&mlp->lin1, &mem->lin1, d, h);
+    bitlinear_init(&mlp->lin2, &mem->lin2, h, o);
 }
 
 

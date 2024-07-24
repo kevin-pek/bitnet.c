@@ -29,7 +29,7 @@ float log_sum_exp(const float* logits, size_t dim) {
  * @param targets list of class labels for current batch
  * @param n_labels output dimension of model, corresponds to the number of classes
  * @param batch_size
- * @return crossentropy loss value
+ * @return crossentropy loss value normalized across the batch
  */
 float cross_entropy_loss(const float* logits, const uint32_t* targets, size_t n_labels, size_t batch_size) {
     float loss = 0.0f;
@@ -39,7 +39,7 @@ float cross_entropy_loss(const float* logits, const uint32_t* targets, size_t n_
         float lse = log_sum_exp(logits_b, n_labels);
         loss -= logits_b[targets[b]] - lse;
     }
-    return loss / batch_size;
+    return loss / (batch_size * n_labels);
 }
 
 #endif
