@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "../utils/matrix.h"
-
 #ifdef DEBUG
 #include "../utils/logging.h"
 #endif

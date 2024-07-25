@@ -194,10 +194,8 @@ int main() {
     int exit_code = 0;
     // load training images from MNIST dataset
     mnist_dataset_t* trainset = mnist_init_dataset(
-        "MNIST_ORG/t10k-images.idx3-ubyte",
-        "MNIST_ORG/t10k-labels.idx1-ubyte"
-        // "MNIST_ORG/train-images.idx3-ubyte",
-        // "MNIST_ORG/train-labels.idx1-ubyte"
+        "MNIST_ORG/train-images.idx3-ubyte",
+        "MNIST_ORG/train-labels.idx1-ubyte"
     );
     if (trainset == NULL) { exit_code = 1; goto cleanup; }
 
