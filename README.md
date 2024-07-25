@@ -16,7 +16,7 @@ The train program initializes a new model and trains it on the dataset specified
 
 ```sh
 gcc mnist_train.c -o train_mnist -lm
-./mnist_train
+./train_mnist
 ```
 
 ## Project Structure
