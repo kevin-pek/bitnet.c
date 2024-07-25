@@ -1,7 +1,7 @@
-/*
-Hash table implementation for insertion and lookup from string keys to integer values.
-Simple implementation with linear probing and single element buckets.
-*/
+/**
+ * Hash table implementation for insertion and lookup from string keys to integer values.
+ * Simple implementation with linear probing and single element buckets.
+ */
 
 #ifndef HASH_H
 #define HASH_H

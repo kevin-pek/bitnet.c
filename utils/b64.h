@@ -1,12 +1,13 @@
-/*
-base64 decode function adapted into C from the C++ implementation provided in
-https://stackoverflow.com/questions/180947/base64-decode-snippet-in-c/13935718
-*/
+/**
+ * base64 decode function adapted into C from the C++ implementation provided in
+ * https://stackoverflow.com/questions/180947/base64-decode-snippet-in-c/13935718
+ */
 
 #ifndef BASE64_H
 #define BASE64_H
 
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -28,10 +29,13 @@ typedef struct {
     char* str;
 } DecodedString;
 
-/// @brief Decode given string of base64 characters into a new character array.
-///        Assumes that the input is a valid base64 string.
-/// @param b64str
-/// @return Decoded char byte array. `str` attribute needs to be deallocated.
+/**
+ * @brief Decode given string of base64 characters into a new character array.
+ *        Assumes that the input is a valid base64 string.
+ *
+ * @param b64str
+ * @return Decoded char byte array. `str` attribute needs to be deallocated.
+ */
 static inline DecodedString b64_decode(const char* b64str) {
     size_t len = strlen(b64str);
     if (len == 0) return (DecodedString) {};

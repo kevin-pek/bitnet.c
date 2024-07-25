@@ -144,7 +144,7 @@ void matmul_bkwd(float* dw, float* dx,
     for (size_t i = 0; i < in_dim; i++) {
         dx[i] /= batch_size;
         for (size_t j = 0; j < out_dim; j++) {
-            dw[i * in_dim + j] /= batch_size;
+            dw[j * in_dim + i] /= batch_size;
         }
     }
 #ifdef DEBUG_MAT

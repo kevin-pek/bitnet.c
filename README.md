@@ -1,49 +1,43 @@
-# BitLlama – a 0 dependencies BitNet implementation in C
+# WIP: BitNet – a 0 dependencies BitNet implementation in C
 
-This is my attempt to implement an LLM based on the BitNet paper from scratch. The architecture is a custom version of the LLaMA architecture that incorporates the BitLinear layer, and Contextual Positional Encodings (CoPE) to replace Rotary Position Enocdings. It also implements the inference process for a BPE tokenizer trained with the [tiktoken](https://github.com/openai/tiktoken) library.
+This is my attempt to implement neural network training and inference using the BitLinear layer from the [BitNet](https://arxiv.org/abs/2310.11453) paper from scratch. The long term goal is to work towards an implementation of the LLaMA architecture. This repo also implements inference for a BPE tokenizer trained with the [tiktoken](https://github.com/openai/tiktoken) library.
 
-This repo also contains all the necessary code needed for training and running inference on the model in separate libraries such as dataloaders, base64 decoding, and data structures such as PriorityQueues and Hashtables.
+To keep things concise, the source files for layers, data structures and other utilities are implemented as single header libraries.
 
-The source files for layers, data structures and other utilities are implemented as single header libraries in this repo to keep things concise, and easy to copy to other projects.
+## Prerequisites
+
+You should only need to have a C compiler installed.
 
 ## Usage
-
-### Inference
-
-The `infer.c` program runs the model in a small shell, where the input prompt entered will be sent to the model as input. To start the program, compile and run it with the following command:
-
-```sh
-./infer -t tokenizer_path -w weights_path
-```
 
 ### Training
 
 The train program initializes a new model and trains it on the dataset specified.
 
 ```sh
-./train -t tokenizer_path -d dataset_directory_path
-```
-
-To run the test cases defined in code, compile the program with the `DEBUG` macro defined.
-
-```sh
-gcc -o infer infer.c -DDEBUG
+gcc mnist_train.c -o train_mnist -lm
+./mnist_train
 ```
 
 ## Project Structure
 
 ```plaintext
 ├── layers/         # source files for layers of the LLM
-├── utils/          # utility functions (data structures, matrix functions, dataloaders, etc.)
-├── tests/          # unit tests for various libraries and functions
-├── experiments/    # programs used to investigate ideas
-├── scripts/        # utility scripts used for tasks
-├── bitnet.h        # single header library for training the bitnet model
-├── bitnet_infer.h  # single header libary for inference of the bitnet model
-├── tokenizer.h     # single header library for inference on BPE tokenizer
-├── infer.c         # program to run an inference loop
-└── train.c         # program to run the training loop for the model
+├── utils/          # utilities (data structures, matrix multiplication, dataloaders, etc.)
+├── tests/          # programs to test various libraries and functions
+├── experiments/    # miscellaneous programs used to investigate ideas
+├── tokenizer.h     # single header library for running inference for BPE tokenizer
+└── mnist_train.c   # program to run the training loop for MNIST classification
 ```
+
+## Some conventions
+
+Function names for layers contain suffix corresponding to their forward and backward pass.
+
+- `_fwd` – forward pass
+- `_bkwd` – backpropagation
+
+Gradient variables are prefixed with `d` eg. gradient of output of a layer is `dy`. Additionally, quantised variables contain a `q` suffix eg. quantised activations will be `xq`.
 
 ## Roadmap
 
@@ -55,9 +49,11 @@ gcc -o infer infer.c -DDEBUG
         - [x] Weight and activation quantisation/dequantisation functions
     - [x] BitLinear MLP Block
     - [x] Cross entropy loss implementation
-    - [ ] Training weight initialisation and allocation
-    - [ ] AdamW optimiser implementation
-    - [ ] Training loop on MNIST dataset for BitMLP
+    - [x] Training weight initialisation and allocation
+    - [x] AdamW optimiser implementation
+    - [x] Training loop on MNIST dataset for BitMLP
+    - [ ] Train a multilayer perceptron classifier for the MNIST dataset
+    - [ ] Parallelize code using OpenMP
 - Tokenizer implementation
     - [x] Loading tokenizer from file
     - [x] Base64 decoding
@@ -65,27 +61,12 @@ gcc -o infer infer.c -DDEBUG
     - [x] PriorityQueue implementation
     - [x] Encode text to input ids using tokenizer
     - [x] Decode input ids to text using tokenizer
+    - [ ] Verify correctness of tokenizer implementation on sample corpus
 - BitNet transformer implementation
     - [x] Token embedding layer
     - [ ] Grouped query attention block
-        - [ ] KV Cache
-        - [ ] Contextual position embeddings
-        - [ ] MLP Block
     - [ ] Forward and backward pass for BitNet architecture
     - [ ] Dataloader implementation
-    - [ ] Model checkpointing and training monitoring
-    - [ ] Training loop program
-- Inference implementation
-    - [ ] Loading saved model weights
-    - [ ] Memory optimised inference pass
-    - [ ] Interactive inference loop
-
-## Some conventions
-
-Function names for layers contain suffix corresponding to their forward and backward pass.
-
-- `_fwd` – forward pass
-- `_bkwd` – backpropagation
-
-Gradient variables are prefixed with `d` eg. gradient of output of a layer is `dy`. Additionally, quantised variables contain a `q` suffix eg. quantised activations will be `xq`.
+    - [ ] Saving and loading model weights
+    - [ ] Training loop implementation
 
