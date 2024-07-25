@@ -12,7 +12,7 @@ You should only need to have a C compiler installed.
 
 ### Training
 
-The train program initializes a new model and trains it on the dataset specified.
+The train program initializes a new model and trains it on the dataset specified. For example,
 
 ```sh
 gcc mnist_train.c -o train_mnist -lm
@@ -22,12 +22,12 @@ gcc mnist_train.c -o train_mnist -lm
 ## Project Structure
 
 ```plaintext
-├── layers/         # source files for layers of the LLM
-├── utils/          # utilities (data structures, matrix multiplication, dataloaders, etc.)
-├── tests/          # programs to test various libraries and functions
 ├── experiments/    # miscellaneous programs used to investigate ideas
-├── tokenizer.h     # single header library for running inference for BPE tokenizer
-└── mnist_train.c   # program to run the training loop for MNIST classification
+├── layers/         # source files for layers of the LLM
+├── tests/          # programs to test various libraries and functions
+├── utils/          # utilities (data structures, matrix multiplication, dataloaders, etc.)
+├── mnist_train.c   # program to run the training loop for MNIST classification
+└── tokenizer.h     # single header library for running inference for BPE tokenizer
 ```
 
 ## Some conventions
