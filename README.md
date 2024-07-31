@@ -1,6 +1,6 @@
 # WIP: BitNet – a 0 dependency BitNet implementation in C
 
-This is my attempt to implement neural network training and inference with the BitLinear layer from the [BitNet](https://arxiv.org/abs/2310.11453) paper from scratch. The long term goal is to work towards an implementation of the LLaMA architecture. This repo also implements inference for a BPE tokenizer trained with the [tiktoken](https://github.com/openai/tiktoken) library.
+This is my attempt to implement neural network training and inference with the BitLinear layer from the [BitNet](https://arxiv.org/abs/2310.11453) paper from scratch in C. The long term goal is to work towards an implementation of a smaller version of the LLaMA architecture. This repo also implements inference for a BPE tokenizer trained with the [tiktoken](https://github.com/openai/tiktoken) library.
 
 To keep things concise, the source files for layers, data structures and other utilities are implemented as single header libraries.
 
@@ -18,11 +18,10 @@ gcc mnist_train.c -o train_mnist -lm
 ## Project Structure
 
 ```plaintext
-├── experiments/    # miscellaneous programs used to investigate ideas
+├── experiments/    # miscellaneous programs used to test ideas
 ├── layers/         # source files for layers of the LLM
 ├── utils/          # utility functions (data structures, matrix functions, dataloaders, etc.)
 ├── tests/          # unit tests for various libraries and functions
-├── experiments/    # programs used to investigate ideas
 ├── scripts/        # utility scripts used for tasks
 ├── tokenizer.h     # single header library for inference on BPE tokenizer
 └── mnist_bitmlp.c  # train and test bit multi layer perceptron on MNIST dataset
