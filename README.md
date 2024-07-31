@@ -1,6 +1,6 @@
 # WIP: BitNet – a 0 dependency BitNet implementation in C
 
-This is my attempt to implement neural network training and inference with the BitLinear layer from the [BitNet](https://arxiv.org/abs/2310.11453) paper from scratch in C. The long term goal is to work towards an implementation of a smaller version of the LLaMA architecture. This repo also implements inference for a BPE tokenizer trained with the [tiktoken](https://github.com/openai/tiktoken) library.
+This is my attempt to implement neural network training and inference with the BitLinear layer from the [BitNet](https://arxiv.org/abs/2310.11453) paper from scratch in C for learning purposes. The long term goal is to work towards an implementation of a smaller version of the LLaMA architecture. This repo also implements inference for a BPE tokenizer trained with the [tiktoken](https://github.com/openai/tiktoken) library.
 
 To keep things concise, the source files for layers, data structures and other utilities are implemented as single header libraries.
 
