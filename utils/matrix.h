@@ -36,12 +36,12 @@ static inline float std_norm() {
 /**
  * @brief Matrix multiplication y = Wx, with W (n, m), x (m, b)
  * 
- * @param y output matrix
- * @param x input matrix
- * @param w weight matrix
- * @param n output dims, number of rows in weight matrix, dimensionality of output matrix
- * @param m input dims, number of cols in weight matrix, rows in x
- * @param b batch size, num cols in matrix x
+ * @param y              output matrix, column major
+ * @param x              input matrix, column major
+ * @param w              weight matrix, row major
+ * @param out_dim    (n) num rows in weight matrix
+ * @param in_dim     (m) num cols in weight matrix/rows in activation x
+ * @param batch_size (b) num cols in matrix x
  */
 void matmul_fwd(float* y, const float* x, const float* w, size_t n, size_t m, size_t b) {
     for (size_t i = 0; i < n; i++) {
@@ -58,15 +58,13 @@ void matmul_fwd(float* y, const float* x, const float* w, size_t n, size_t m, si
 /**
  * @brief Matrix multiplication using 8-bit quantized activations and 1-bit
  *        quantized weight matrices.  y = Wx, where W (n, m), x (m, b)
- *        We assume that m is multiple of 8 which is fine since dims are
- *        large powers of 2 by convention.
  *
- * @param yq 8 bit quantised outputs
- * @param xq 8 bit quantised inputs
- * @param wq 1 bit quantised weight matrix
- * @param n  output dims
- * @param m  input dims, must be a multiple of 8
- * @param b  batch size, num cols in matrix x
+ * @param yq             8 bit quantised outputs
+ * @param xq             8 bit quantised inputs
+ * @param wq             1 bit quantised weight matrix
+ * @param out_dim    (n) num rows in weight matrix
+ * @param in_dim     (m) num cols in weight matrix/rows in activation x
+ * @param batch_size (b) num cols in matrix x
  */
 void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
                    size_t n, size_t m, size_t b) {
@@ -79,15 +77,15 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
                 // multiply the sign bits of current wq byte with input activations
                 size_t l = 0;
                 do {
-                    uint8_t mask = 0x80 >> l; // mask out the bits that are not in use
-                    // bit of 1 represents negative number
+                    uint8_t mask = 0x80 >> l; // mask out unused bits
+                    // weight bit 1 = -1, bit 0 = 1
                     if ((wq_ptr[k / 8] & mask) != 0)
                         acc -= (int32_t) (*xq_ptr);
                     else
                         acc += (int32_t) (*xq_ptr);
                     xq_ptr += b; // move on to the next row in matrix
                     l++;
-                } while (k * 8 + l < m); // this version should support any number of columns in the weight matrix
+                } while (k * 8 + l < m); // if number of colums is not multiple of 8, extra bits in last byte of each row will be unused
             }
             yq[i * b + j] = (int8_t) acc;
         }
@@ -97,15 +95,17 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
 
 /**
  * @brief Compute gradients of weight and activations of matrix multiplication.
+ *        This is used for bit matrices as well to update bit weights during
+ *        the training loop.
  * 
- * @param dw gradient of weights with full precision floats
- * @param dx gradient of inputs to BitLinear layer
- * @param dy gradient of loss function wrt output of bitlinear layer
- * @param w  full precision weights of BitLinear layer
- * @param x  input activations to bitlinear layer
- * @param n  output dim, num rows in weight matrix
- * @param m  input dim, num cols in weight matrix/rows in activation x
- * @param b  batch size, num cols in matrix x
+ * @param dw          gradient of weights with full precision floats
+ * @param dx          gradient of inputs
+ * @param dy          gradient of loss
+ * @param w           full precision weights of Bit matrix
+ * @param x           input activations
+ * @param out_dim     num rows in weight matrix
+ * @param in_dim      num cols in weight matrix/rows in activation x
+ * @param batch_size  num cols in matrix x
  */
 void matmul_bkwd(float* dw, float* dx,
                  const float* dy, const float* w, const float* x,
@@ -127,7 +127,7 @@ void matmul_bkwd(float* dw, float* dx,
     for (size_t i = 0; i < in_dim; i++) {
         dx[i] /= batch_size;
         for (size_t j = 0; j < out_dim; j++) {
-            dw[j * in_dim + i] /= batch_size;
+            dw[i * out_dim + j] /= batch_size;
         }
     }
 }
@@ -161,8 +161,7 @@ void matadd_bkwd(float* dm1, float* dm2,
  * @brief Kaiming initialization with variance of 1. This sets the weights such
  *        that the variance remains the same across every layers' outputs in the
  *        forward pass, addressing the vanishing gradient problem. This is used
- *        instead of Xavier initialization since we are using GELU activations
- *        in our architecture.
+ *        instead of Xavier initialization since GELU activation is used.
  *
  * @param x pointer to matrix
  * @param len length of matrix

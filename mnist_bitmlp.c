@@ -12,12 +12,12 @@
 #include "utils/optim.h"
 
 #define BATCH_SIZE 32
-#define HIDDEN_SIZE 64
+#define HIDDEN_SIZE 256
 #define EPOCHS 1
-#define LR 1e-4f
+#define LR 1e-3f
 #define EPS 1e-8f
-#define BETA1 0.8f
-#define BETA2 0.9f
+#define BETA1 0.9f
+#define BETA2 0.99f
 #define WEIGHT_DECAY 1e-2f
 
 typedef struct {

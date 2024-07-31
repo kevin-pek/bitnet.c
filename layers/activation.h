@@ -28,10 +28,6 @@ void softmax_fwd(float* probs, const float* logits, size_t dim, size_t batch_siz
         for (size_t i = 0; i < dim; i++)
             probs_b[i] = expf(logits_b[i] - lse);
     }
-#ifdef DEBUG
-    printf("Softmax probas:\n");
-    print_mat(probs, batch_size, dim);
-#endif
 }
 
 
@@ -53,10 +49,6 @@ void softmax_bkwd(float* dloss, const float* probs, const uint32_t* targets, siz
         for (size_t i = 0; i < dim; i++)
             dloss_b[i] = probs_b[i] - (i == targets[b] ? 1.0f : 0.0f);
     }
-#ifdef DEBUG
-    printf("Softmax gradients:\n");
-    print_mat(dloss, batch_size, dim);
-#endif
 }
 
 
@@ -93,10 +85,6 @@ void gelu_bkwd(float* dx, const float* dy, const float* in, size_t dim, size_t b
             dx[idx] = dy[idx] * dgelu;
         }
     }
-#ifdef DEBUG_GELU
-    printf("After - GELU gradient:\n");
-    print_mat(dx, batch_size, dim);
-#endif
 }
 
 #endif
