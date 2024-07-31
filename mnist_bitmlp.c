@@ -243,14 +243,14 @@ int main() {
     if (grad_params == NULL) { exit_code = 6; goto cleanup; }
 
     // Assign pointers for gradients to contiguous memory block
-    arr_ptr = grad_params;
-    grads.lin1.dg = arr_ptr;
-    arr_ptr += model.d;
-    grads.lin1.dw = arr_ptr;
-    arr_ptr += model.d * model.h;
-    grads.lin2.dg = arr_ptr;
-    arr_ptr += model.d;
-    grads.lin2.dw = arr_ptr;
+    float* grad_ptr = grad_params;
+    grads.lin1.dg = grad_ptr;
+    grad_ptr += model.d;
+    grads.lin1.dw = grad_ptr;
+    grad_ptr += model.d * model.h;
+    grads.lin2.dg = grad_ptr;
+    grad_ptr += model.d;
+    grads.lin2.dw = grad_ptr;
 
     uint8_t* uint8_params = (uint8_t*) calloc(batch.size * (((model.d + 7) / 8) * model.h + ((model.h + 7) / 8) * model.o), sizeof(uint8_t));
     if (uint8_params == NULL) { exit_code = 7; goto cleanup; }
