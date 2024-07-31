@@ -7,7 +7,6 @@
 #include "layers/activation.h"
 #include "layers/bitlinear.h"
 #include "layers/mlp.h"
-#include "utils/logging.h"
 #include "utils/loss.h"
 #include "utils/mnist.h"
 #include "utils/optim.h"
@@ -15,10 +14,10 @@
 #define BATCH_SIZE 32
 #define HIDDEN_SIZE 64
 #define EPOCHS 1
-#define LR 1e-3f
+#define LR 1e-4f
 #define EPS 1e-8f
-#define BETA1 0.9f
-#define BETA2 0.999f
+#define BETA1 0.8f
+#define BETA2 0.9f
 #define WEIGHT_DECAY 1e-2f
 
 typedef struct {
@@ -102,11 +101,6 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
         model->o,
         batch->size
     );
-#ifdef DEBUG
-    printf("MLP Logits:\n");
-    print_mat(mem->logits, batch->size, model->o);
-#endif
-
     softmax_fwd(mem->probs, mem->logits, model->o, batch->size);
 
     // loss is only used for logging, we only need the logits for backpropagation
@@ -300,46 +294,24 @@ int main() {
     mlp_init(&mlp, &mem, model.d, model.h, model.o);
 
     adamw_t optim;
-    if (adamw_alloc(&optim, n_params) != 0) {
-        exit_code = 10;
-        goto cleanup;
-    }
+    if (adamw_alloc(&optim, n_params) != 0) { exit_code = 10; goto cleanup; }
     adamw_init(&optim, LR, BETA1, BETA2, EPS, WEIGHT_DECAY);
 
     classifier_metrics_t metrics = {0};
-    while (mnist_get_next_batch(&batch, testset) == 0)
-        validation_step(&model, &batch, &metrics);
-    printf("Zero-shot Accuracy: %.4f (%d / %d)\n", (float) metrics.correct / (float) (metrics.wrong + metrics.correct), metrics.correct, metrics.correct + metrics.wrong);
-    mnist_reset_dataset(testset);
-    batch.size = BATCH_SIZE;
+    // Get zero shot accuracy for initial weight parameters
+    // while (mnist_get_next_batch(&batch, testset) == 0)
+    //     validation_step(&model, &batch, &metrics);
+    // printf("Zero-shot Accuracy: %.4f (%d / %d)\n", (float) metrics.correct / (float) (metrics.wrong + metrics.correct), metrics.correct, metrics.correct + metrics.wrong);
+    // mnist_reset_dataset(testset);
+    // batch.size = BATCH_SIZE;
 
     for (int i = 0; i < EPOCHS; i++) {
         int j = 0;
         while (mnist_get_next_batch(&batch, trainset) == 0) {
             printf("Epoch: %d, Batch %d, ", i, j++);
-#ifdef VERBOSE
-            printf("Labels: [");
-            for (int k = 0; k < batch.size; k++)
-                printf("%u, ", batch.labels[k]);
-            printf("], ");
-#endif
             training_step(&model, &batch);
             adamw_update(&optim, params, grad_params, i + 1);
-            #ifdef DEBUG
-                // printf("Params after update:\n");
-                // printf("RMS1:\n");
-                // print_mat(model.params->lin1.g, model.h, model.d);
-                if (j == 4) {
-                    printf("DEBUG: Skipping to cleanup\n");
-                    goto cleanup;
-                }
-            #endif
         }
-        printf("Final gradients:\n");
-        print_mat(model.grads->lin1.dg, 1, model.d);
-        // print_mat(model.grads->lin1.dw, model.h, model.d);
-        print_mat(model.grads->lin2.dg, 1, model.h);
-        print_mat(model.grads->lin2.dw, model.h, model.o);
         mnist_reset_dataset(trainset);
         batch.size = BATCH_SIZE; // reset batch size in case last batch set it lower
     }

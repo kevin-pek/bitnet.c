@@ -32,29 +32,14 @@ static inline float rmsnorm_inv(const float* x, size_t len) {
  * @param batch_size
  */
 void rmsnorm_fwd(float* y, const float* x, const float* g, size_t dim, size_t batch_size) {
-#ifdef DEBUG
-    printf("RMSNorm inputs:\n");
-    print_mat(x, batch_size, dim);
-#endif
     for (size_t b = 0; b < batch_size; b++) {
         const float* x_b = x + b * dim;
         float* y_b = y + b * dim;
         float rms_inv = rmsnorm_inv(x_b, dim);
-        #ifdef DEBUG_RMS
-            printf("RMS inverse: %.4f\n", rms_inv);
-            printf("RMS g\n");
-            print_mat(g, 1, dim);
-            printf("RMS x_b\n");
-            print_mat(x_b, 1, dim);
-        #endif
         for (size_t i = 0; i < dim; i++) {
             y_b[i] = g[i] * rms_inv * x_b[i];
         }
     }
-#ifdef DEBUG
-    printf("RMSNorm outputs:\n");
-    print_mat(y, batch_size, dim);
-#endif
 }
 
 
@@ -77,9 +62,6 @@ void rmsnorm_bkwd(float* dg, float* dx,
         const float* dy_b = dy + b * dim;
         float* dx_b = dx + b * dim;
         float rms_inv = rmsnorm_inv(x_b, dim); // 1 / RMS(x)
-        #ifdef DEBUG_RMS
-            printf("RMS inverse: %.4f\n", rms_inv);
-        #endif
         for (size_t i = 0; i < dim; i++) {
             dg[i] += dy_b[i] * x_b[i] * rms_inv; // dL / dg_i
             for (size_t j = 0; j < dim; j++) { // dL / dx_i
@@ -90,12 +72,7 @@ void rmsnorm_bkwd(float* dg, float* dx,
             }
         }
     }
-    #ifdef DEBUG_GRAD
-        // printf("RMS input gradients:\n");
-        // print_mat(dx, batch_size, dim);
-        printf("RMS intermediate gradients:\n");
-        print_mat(dg, 1, dim);
-    #endif
+
     for (size_t i = 0; i < dim; i++) {
         dg[i] /= batch_size;
         // Check for NaN and clip gradients to avoid extreme values
@@ -112,18 +89,6 @@ void rmsnorm_bkwd(float* dg, float* dx,
             if (dx[b * dim + i] < -CLIP_RMS_GRAD) dx[b * dim + i] = -CLIP_RMS_GRAD;
         }
     }
-    // for (size_t i = 0; i < dim; i++) {
-    //     dg[i] /= batch_size;
-    //     for (size_t b = 0; b < batch_size; b++) {
-    //         dx[b * dim + i] /= batch_size;
-    //     }
-    // }
-#ifdef DEBUG_GRAD
-    printf("RMSNorm output gradients:\n");
-    print_mat(dg, 1, dim);
-    // printf("RMSNorm scaling factors:\n");
-    // print_mat(g, 1, dim);
-#endif
 }
 
 #endif

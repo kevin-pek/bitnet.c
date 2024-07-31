@@ -72,18 +72,10 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
                    size_t n, size_t m, size_t b) {
     for (size_t i = 0; i < n; i++) {
         for (size_t j = 0; j < b; j++) {
-            #ifdef VERBOSE_MAT
-                printf("Elem (%zu, %zu):\n", i, j);
-            #endif
             const int8_t* xq_ptr = xq + j; // pointer to first row at our current column
             const uint8_t* wq_ptr = wq + i * ((m + 7) / 8); // pointer to start of row of weight matrix
             int32_t acc = 0; // accumulate results in larger int to prevent overflow
             for (size_t k = 0; k < m; k += 8) {
-                #ifdef VERBOSE_MAT
-                    printf("Byte: ");
-                    printbin8(wq_ptr[k / 8]);
-                    printf("\n");
-                #endif
                 // multiply the sign bits of current wq byte with input activations
                 size_t l = 0;
                 do {
@@ -118,15 +110,6 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
 void matmul_bkwd(float* dw, float* dx,
                  const float* dy, const float* w, const float* x,
                  size_t out_dim, size_t in_dim, size_t batch_size) {
-#ifdef DEBUG_MAT
-    printf("Before matmul backprop:\n");
-    printf("dW:");
-    print_mat(dw, out_dim, in_dim);
-    printf("dx:");
-    print_mat(dx, in_dim, batch_size);
-    printf("dy:");
-    print_mat(dy, batch_size, in_dim);
-#endif
     // accumulate gradients from the batch
     for (size_t b = 0; b < batch_size; b++) {
         const float* dy_b = dy + b * out_dim;
@@ -147,13 +130,6 @@ void matmul_bkwd(float* dw, float* dx,
             dw[j * in_dim + i] /= batch_size;
         }
     }
-#ifdef DEBUG_MAT
-    printf("After matmul backprop:\n");
-    printf("dW:");
-    print_mat(dw, out_dim, in_dim);
-    printf("dx:");
-    print_mat(dx, in_dim, batch_size);
-#endif
 }
 
 

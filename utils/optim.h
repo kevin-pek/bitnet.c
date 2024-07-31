@@ -82,10 +82,6 @@ void adamw_update(adamw_t* optim, float* params, float* grads, int t) {
         float v_hat = optim->v[i] / (1 - powf(optim->beta2, (float) t));
         params[i] -= optim->lr * ((m_hat / (sqrtf(v_hat) + optim->eps)) - optim->weight_decay * params[i]);
     }
-#ifdef DEBUG_ADAMW
-    printf("Parameters after update:\n");
-    print_mat(params, 1, optim->n_params);
-#endif
 }
 
 
