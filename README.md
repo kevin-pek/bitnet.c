@@ -22,7 +22,6 @@ gcc mnist_train.c -o train_mnist -lm
 ├── layers/         # source files for layers of the LLM
 ├── utils/          # utility functions (data structures, matrix functions, dataloaders, etc.)
 ├── tests/          # unit tests for various libraries and functions
-├── scripts/        # utility scripts used for tasks
 ├── tokenizer.h     # single header library for inference on BPE tokenizer
 └── mnist_bitmlp.c  # train and test bit multi layer perceptron on MNIST dataset
 ```
