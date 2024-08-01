@@ -29,6 +29,7 @@ typedef struct {
     bitlinear_mem_t* mem_lin3;   // extra hidden layer because 1 isn't enough
     bitlinear_grad_t* grads_lin3;
     bitlinear_t* params_lin3;
+    float* dy_lin3;
     float* probs;   // output probabilities
     size_t d; // input dims
     size_t h1; // hidden dims
@@ -68,12 +69,26 @@ int save_weights(bitmlp_config_t* model, const char* filepath) {
 
 
 void zero_grad(bitmlp_config_t* model, size_t b) {
+    // training parameter gradients
     memset(model->grads->lin1.dg, 0, sizeof(float) * model->d);
     memset(model->grads->lin1.dw, 0, sizeof(float) * model->d * model->h1);
     memset(model->grads->lin2.dg, 0, sizeof(float) * model->h1);
     memset(model->grads->lin2.dw, 0, sizeof(float) * model->h1 * model->h2);
     memset(model->grads_lin3->dg, 0, sizeof(float) * model->h2);
     memset(model->grads_lin3->dw, 0, sizeof(float) * model->h2 * model->o);
+
+    // memory gradients
+    memset(model->mem->dx, 0, sizeof(float) * model->d);
+    memset(model->mem->lin1.dy_rms, 0, sizeof(float) * model->d);
+    memset(model->mem->dx_gelu, 0, sizeof(float) * model->h1);
+    memset(model->mem->dy_gelu, 0, sizeof(float) * model->h1);
+    print_mat(model->mem->dy, 1, model->h2);
+    memset(model->mem->lin2.dy_rms, 0, sizeof(float) * model->h1);
+    print_mat(model->mem->lin2.dy_rms, 1, model->h2);
+    memset(model->mem->dy, 0, sizeof(float) * model->h2);
+    memset(model->mem_lin3_dy_gelu, 0, sizeof(float) * model->h2);
+    memset(model->mem_lin3->dy_rms, 0, sizeof(float) * model->h2);
+    memset(model->dy_lin3, 0, sizeof(float) * model->o);
 }
 
 
@@ -135,16 +150,14 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
 
     zero_grad(model, batch->size);
 
-    float* dloss = model->mem_lin3->y; // reuse memory for logits to propagate gradients for loss
-    softmax_bkwd(dloss, model->probs, batch->labels, model->o, batch->size);
-    batchnorm(dloss, model->o, batch->size);
-
+    softmax_bkwd(model->dy_lin3, model->probs, batch->labels, model->o, batch->size);
+    batchnorm(model->dy_lin3, model->o, batch->size);
     bitlinear_bkwd(
         model->mem_lin3_dy_gelu,
         model->grads_lin3->dw,
         model->grads_lin3->dg,
         model->mem_lin3->dy_rms,
-        dloss,
+        model->dy_lin3,
         model->mem_lin3->x,
         model->mem_lin3->w,
         model->params_lin3->g,
@@ -155,10 +168,6 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
     );
     gelu_bkwd(model->mem->dy, model->mem_lin3_dy_gelu, mem->lin2.y, model->h2, batch->size);
     batchnorm(model->mem->dy, model->h2, batch->size);
-
-    printf("Address of the array pointer: %p\n", (void*) mem->dx);
-    printf("Address of the array pointer: %p\n", (void*) grads->lin1.dw);
-    printf("===================\n");
     mlp_bkwd(
         mem->dx,
         grads->lin1.dw,
@@ -328,7 +337,9 @@ int main() {
     grad_ptr += model.h2;
     lin3_grads.dw = grad_ptr;
 
-    size_t n_bit_params = bitmat_bytes(model.d, model.h1) + bitmat_bytes(model.h1, model.h2) + bitmat_bytes(model.h2, model.o);
+    size_t n_bit_params = bitmat_bytes(model.d, model.h1)
+                        + bitmat_bytes(model.h1, model.h2)
+                        + bitmat_bytes(model.h2, model.o);
     uint8_t* uint8_params = (uint8_t*) calloc(batch.size * n_bit_params, sizeof(uint8_t));
     if (uint8_params == NULL) { exit_code = 7; goto cleanup; }
 
@@ -339,7 +350,7 @@ int main() {
     uint8_ptr += batch.size * bitmat_bytes(model.h1, model.h2);
     lin3_params.wq = uint8_ptr;
 
-    int8_t* int8_params = (int8_t*) calloc(batch.size * (model.d + 2 * model.h1 + 2 * model.h2 + model.o), sizeof(int8_t));
+    int8_t* int8_params = (int8_t*) calloc(batch.size * (model.d + 2 * (model.h1 + model.h2) + model.o), sizeof(int8_t));
     if (int8_params == NULL) { exit_code = 8; goto cleanup; }
 
     int8_t* int8_ptr = int8_params;
@@ -360,7 +371,7 @@ int main() {
                   + bitlinear_mem_size(model.h1, model.h2)
                   + bitlinear_mem_size(model.h2, model.o)
                   + model.o;
-    size_t n_mem_grads = 2 * model.d + 3 * (model.h1 + model.h2);
+    size_t n_mem_grads = 2 * model.d + 3 * (model.h1 + model.h2) + model.o;
     float* mem_params = (float*) calloc(batch.size * n_mems + n_mem_grads, sizeof(float));
     if (params == NULL) { exit_code = 9; goto cleanup; }
 
@@ -403,7 +414,9 @@ int main() {
     mem_ptr += batch.size * model.h2;
     lin3_mem.y = mem_ptr;
     mem_ptr += batch.size * model.o;
-    model.probs = mem_ptr; // batch_size * model.o elems
+    model.dy_lin3 = mem_ptr;
+    mem_ptr += model.o;
+    model.probs = mem_ptr; // batch_size * model.o elements
 
     // Initialize training parameters
     mlp_init(&mlp, &mem, model.d, model.h1, model.h2);

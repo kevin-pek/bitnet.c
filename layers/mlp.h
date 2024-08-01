@@ -29,15 +29,11 @@ typedef struct {
 
 
 /**
- * @brief Initialise weights for MLP.
- *
- * @param d input dimension
- * @param h hidden dimension
- * @param o output dimension
+ * @brief Initialise training weights for MLP.
  */
-void mlp_init(bitmlp_t* mlp, bitmlp_mem_t* mem, size_t d, size_t h, size_t o) {
-    bitlinear_init(&mlp->lin1, &mem->lin1, d, h);
-    bitlinear_init(&mlp->lin2, &mem->lin2, h, o);
+void mlp_init(bitmlp_t* mlp, bitmlp_mem_t* mem, size_t in_dim, size_t hidden_dim, size_t out_dim) {
+    bitlinear_init(&mlp->lin1, &mem->lin1, in_dim, hidden_dim);
+    bitlinear_init(&mlp->lin2, &mem->lin2, hidden_dim, out_dim);
 }
 
 
@@ -75,6 +71,20 @@ void mlp_fwd(float* y, float* gelu, float* rms1, float* rms2, float* x2,
 }
 
 
+/**
+ * @brief Backpropagation for MLP implementation based on the BitNet paper with GELU activation.
+ *
+ * @param dx        gradient of inputs
+ * @param dw1       gradient of weights for first bitlinear layer
+ * @param dw2       gradient of weights for second bitlinear layer
+ * @param dg1       gradient of rms scaling factors for first bitlinear layer
+ * @param dy_rms1   gradient of loss wrt first rms outputs
+ * @param dg2       gradient of rms scaling factors for second bitlinear layer
+ * @param dy_rms2   gradient of loss wrt second rms outputs
+ * @param dy_gelu   gradient of loss wrt GELU outputs
+ * @param dx_gelu   gradient of loss wrt GELU inputs, output of first bitlinear layer
+ * @param dy2       gradient of loss wrt outputs of entire MLP
+ */
 void mlp_bkwd(float* dx, float* dw1, float* dw2, float* dg1, float* dy_rms1, float* dg2, float* dy_rms2,
               float* dy_gelu, float* dx_gelu, const float* dy2,
               const float* x2, const float* w2, const float* g2, const float* rms2,

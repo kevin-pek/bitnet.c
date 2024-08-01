@@ -111,12 +111,11 @@ void matmul_bkwd(float* dw, float* dx,
                  const float* dy, const float* w, const float* x,
                  size_t out_dim, size_t in_dim, size_t batch_size) {
     for (size_t b = 0; b < batch_size; b++) {
-        const float* dy_b = dy + b * out_dim;
         const float* x_b = x + b * in_dim;
         for (size_t j = 0; j < in_dim; j++) {
             for (size_t i = 0; i < out_dim; i++) {
-                dw[i * in_dim + j] += dy_b[i] * x_b[j];
-                dx[j] += w[i * in_dim + j] * dy_b[i];
+                dw[i * in_dim + j] += dy[i] * x_b[j];
+                dx[j] += w[i * in_dim + j] * dy[i];
             }
         }
     }
