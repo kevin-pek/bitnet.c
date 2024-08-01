@@ -6,14 +6,17 @@
 #include <stdint.h>
 #include <string.h>
 #include "activation.h"
+#include "batchnorm.h"
 #include "rmsnorm.h"
 #include "../utils/matrix.h"
 
 // Store outputs of inputs to layers for gradient computation.
 typedef struct {
-    float* x;     // input to bitlinear layer
-    float* y_rms; // output of rmsnorm, input to bit matrix multiplication
-    float* w;     // weights are stored in row major order and full precision for training
+    float* x;      // input to bitlinear layer
+    float* y_rms;  // output of rmsnorm, input to bit matrix multiplication
+    float* dy_rms; // gradient of loss wrt rmsnorm output
+    float* w;      // weights are stored in row major order and full precision for training
+    float* y;      // output of bitlinear layer
 } bitlinear_mem_t;
 
 typedef struct {
@@ -36,23 +39,10 @@ void bitlinear_init(bitlinear_t* bitlin, bitlinear_mem_t* mem, size_t in_dim, si
 }
 
 
-// Assign memory regions for intermediate values and gradients in the bitlinear layer.
-void bitlinear_train_init(bitlinear_mem_t* mem, bitlinear_grad_t* grads, float* arr,
-                          size_t in_dim, size_t out_dim, size_t batch_size) {
-    float* arr_ptr = arr;
-    mem->x = arr_ptr;
-
-    arr_ptr += in_dim * batch_size;
-    mem->y_rms = arr_ptr;
-
-    arr_ptr += in_dim * batch_size;
-    mem->w = arr_ptr;
-
-    arr_ptr += in_dim * out_dim;
-    grads->dw = arr_ptr;
-
-    arr_ptr += in_dim * out_dim;
-    grads->dg = arr_ptr;
+// Number of parameters for storing bitlinear_mem_t, excluding w and dy_rms since
+// those are allocated as part of training parameters.
+size_t bitlinear_mem_size(size_t in_dim, size_t out_dim) {
+    return 2 * in_dim + out_dim;
 }
 
 
@@ -201,23 +191,29 @@ void bitlinear_fwd(float* y, float* rms,
 /**
  * @brief Compute gradients for BitLinear layer and its RMSNorm weights.
  *
- * @param dx      gradient of input
- * @param dw      gradient of bit matrix weights
- * @param dg      gradient of rmsnorm scaling factors
- * @param dy      gradient of loss wrt output of this layer
- * @param x       input to bitlinear layer
- * @param w       unquantized weights in bit matrix
- * @param g       scaling factors for rmsnorm
- * @param y_rms   output of rmsnorm layer
- * @param in_dim  dimensionality of input vectors, cols of weight matrix
- * @param out_dim dimensionality of output vectors, rows of weight matrix
+ * @param dx          gradient of input
+ * @param dw          gradient of bit matrix weights
+ * @param dg          gradient of rmsnorm scaling factors
+ * @param dy_rms      gradient of loss wrt rmsnorm output
+ * @param dy          gradient of loss wrt output of this layer
+ * @param x           input to bitlinear layer
+ * @param w           unquantized weights in bit matrix
+ * @param g           scaling factors for rmsnorm
+ * @param y_rms       output of rmsnorm layer
+ * @param in_dim      dimensionality of input vectors, cols of weight matrix
+ * @param out_dim     dimensionality of output vectors, rows of weight matrix
  * @param batch_size
  */
-void bitlinear_bkwd(float* dx, float* dw, float* dg,
+void bitlinear_bkwd(float* dx, float* dw, float* dg, float* dy_rms,
                     const float* dy, const float* x, const float* w, const float* g, const float* y_rms,
                     size_t in_dim, size_t out_dim, size_t batch_size) {
-    matmul_bkwd(dw, dx, dy, w, y_rms, out_dim, in_dim, batch_size);
-    rmsnorm_bkwd(dg, dx, dx, x, g, in_dim, batch_size);
+    matmul_bkwd(dw, dy_rms, dy, w, y_rms, out_dim, in_dim, batch_size);
+    batchnorm(dw, in_dim * out_dim, batch_size);
+    batchnorm(dy_rms, in_dim, batch_size);
+
+    rmsnorm_bkwd(dg, dx, dy_rms, x, g, in_dim, batch_size);
+    batchnorm(dg, in_dim, batch_size);
+    batchnorm(dx, in_dim, batch_size);
 }
 
 

@@ -2,6 +2,7 @@
 #define FFN_H
 
 #include "activation.h"
+#include "batchnorm.h"
 #include "bitlinear.h"
 #include <stdint.h>
 #include <string.h>
@@ -10,11 +11,10 @@
 typedef struct {
     float* dx; // gradient of inputs to mlp layer
     bitlinear_mem_t lin1;
-    float* x_gelu;    // input to gelu activation
-    float* dy_hidden; // gradient of loss for hidden layer
+    float* dx_gelu; // gradient of loss wrt output of GELU
+    float* dy_gelu; // gradient of loss wrt output of GELU
     bitlinear_mem_t lin2;
-    float* logits;  // output of second bitlinear layer
-    float* probs;   // output probabilities
+    float* dy; // gradient of loss wrt outputs of the mlp
 } bitmlp_mem_t;
 
 typedef struct {
@@ -75,15 +75,17 @@ void mlp_fwd(float* y, float* gelu, float* rms1, float* rms2, float* x2,
 }
 
 
-void mlp_bkwd(float* dx, float* dw1, float* dw2, float* dg1, float* dg2, float* dy1,
-              const float* dy2,
+void mlp_bkwd(float* dx, float* dw1, float* dw2, float* dg1, float* dy_rms1, float* dg2, float* dy_rms2,
+              float* dy_gelu, float* dx_gelu, const float* dy2,
               const float* x2, const float* w2, const float* g2, const float* rms2,
-              const float* x_gelu,
+              const float* y1,
               const float* x1, const float* w1, const float* g1, const float* rms1,
               size_t d, size_t h, size_t o, size_t b) {
-    bitlinear_bkwd(dy1, dw2, dg2, dy2, x2, w2, g2, rms2, h, o, b);
-    gelu_bkwd(dy1, dy1, x_gelu, h, b);
-    bitlinear_bkwd(dx, dw1, dg1, dy1, x1, w1, g1, rms1, d, h, b);
+    bitlinear_bkwd(dy_gelu, dw2, dg2, dy_rms2, dy2, x2, w2, g2, rms2, h, o, b);
+    gelu_bkwd(dx_gelu, dy_gelu, y1, h, b);
+    batchnorm(dx_gelu, h, b);
+
+    bitlinear_bkwd(dx, dw1, dg1, dy_rms1, dx_gelu, x1, w1, g1, rms1, d, h, b);
 }
 
 #endif

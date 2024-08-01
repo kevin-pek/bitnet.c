@@ -59,34 +59,15 @@ void rmsnorm_bkwd(float* dg, float* dx,
                   size_t dim, size_t batch_size) {
     for (size_t b = 0; b < batch_size; b++) {
         const float* x_b = x + b * dim;
-        const float* dy_b = dy + b * dim;
-        float* dx_b = dx + b * dim;
         float rms_inv = rmsnorm_inv(x_b, dim); // 1 / RMS(x)
         for (size_t i = 0; i < dim; i++) {
-            dg[i] += dy_b[i] * x_b[i] * rms_inv; // dL / dg_i
+            dg[i] += dy[i] * x_b[i] * rms_inv; // dL / dg_i
             for (size_t j = 0; j < dim; j++) { // dL / dx_i
                 if (i == j)
-                    dx_b[i] += dy_b[j] * g[j] * rms_inv * (1 - rms_inv * x_b[i] * x_b[i] / dim);
+                    dx[i] += dy[j] * g[j] * rms_inv * (1 - rms_inv * x_b[i] * x_b[i] / dim);
                 else
-                    dx_b[i] -= g[j] * x_b[i] * x_b[j] * rms_inv * rms_inv * rms_inv / dim;
+                    dx[i] -= g[j] * x_b[i] * x_b[j] * rms_inv * rms_inv * rms_inv / dim;
             }
-        }
-    }
-
-    for (size_t i = 0; i < dim; i++) {
-        dg[i] /= batch_size;
-        // Check for NaN and clip gradients to avoid extreme values
-        if (isnan(dg[i])) dg[i] = 0.0f;
-        if (dg[i] > CLIP_RMS_GRAD) dg[i] = CLIP_RMS_GRAD;
-        if (dg[i] < -CLIP_RMS_GRAD) dg[i] = -CLIP_RMS_GRAD;
-    }
-    for (size_t b = 0; b < batch_size; b++) {
-        for (size_t i = 0; i < dim; i++) {
-            dx[b * dim + i] /= batch_size;
-            // Check for NaN and clip gradients to avoid extreme values
-            if (isnan(dx[b * dim + i])) dx[b * dim + i] = 0.0f;
-            if (dx[b * dim + i] > CLIP_RMS_GRAD) dx[b * dim + i] = CLIP_RMS_GRAD;
-            if (dx[b * dim + i] < -CLIP_RMS_GRAD) dx[b * dim + i] = -CLIP_RMS_GRAD;
         }
     }
 }

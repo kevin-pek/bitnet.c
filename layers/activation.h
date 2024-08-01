@@ -44,10 +44,8 @@ void softmax_fwd(float* probs, const float* logits, size_t dim, size_t batch_siz
 void softmax_bkwd(float* dloss, const float* probs, const uint32_t* targets, size_t dim, size_t batch_size) {
     for (size_t b = 0; b < batch_size; b++) {
         const float* probs_b = probs + b * dim;
-        float* dloss_b = dloss + b * dim;
-
         for (size_t i = 0; i < dim; i++)
-            dloss_b[i] = probs_b[i] - (i == targets[b] ? 1.0f : 0.0f);
+            dloss[i] += probs_b[i] - (i == targets[b] ? 1.0f : 0.0f);
     }
 }
 
@@ -82,7 +80,7 @@ void gelu_bkwd(float* dx, const float* dy, const float* in, size_t dim, size_t b
             float tanh_out = tanhf(SQRT_2_OVER_PI * (x + A * x * x * x));
             float dtanh = 1 - tanh_out * tanh_out;
             float dgelu = 0.5 * ((1 + tanh_out) + x * dtanh * SQRT_2_OVER_PI * (1 + 3 * A * x * x));
-            dx[idx] = dy[idx] * dgelu;
+            dx[i] += dy[i] * dgelu;
         }
     }
 }

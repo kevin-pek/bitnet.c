@@ -110,24 +110,14 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
 void matmul_bkwd(float* dw, float* dx,
                  const float* dy, const float* w, const float* x,
                  size_t out_dim, size_t in_dim, size_t batch_size) {
-    // accumulate gradients from the batch
     for (size_t b = 0; b < batch_size; b++) {
         const float* dy_b = dy + b * out_dim;
         const float* x_b = x + b * in_dim;
-        float* dx_b = dx + b * in_dim;
         for (size_t j = 0; j < in_dim; j++) {
             for (size_t i = 0; i < out_dim; i++) {
                 dw[i * in_dim + j] += dy_b[i] * x_b[j];
-                dx_b[j] += w[i * in_dim + j] * dy_b[i];
+                dx[j] += w[i * in_dim + j] * dy_b[i];
             }
-        }
-    }
-
-    // normalize gradients using batch size
-    for (size_t i = 0; i < in_dim; i++) {
-        dx[i] /= batch_size;
-        for (size_t j = 0; j < out_dim; j++) {
-            dw[i * out_dim + j] /= batch_size;
         }
     }
 }
@@ -179,6 +169,11 @@ void mat_init_kaiming(float* x, size_t len) {
  */
 void mat_init_rand(float* x, size_t len) {
     for (size_t i = 0; i < len; i++) x[i] = rand_float();
+}
+
+
+size_t bitmat_bytes(size_t in_dim, size_t out_dim) {
+    return ((in_dim + 7) / 8) * out_dim;
 }
 
 #endif
