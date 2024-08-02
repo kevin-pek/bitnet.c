@@ -119,6 +119,12 @@ void matmul_bkwd(float* dw, float* dx,
             }
         }
     }
+    #ifdef DEBUG
+    fprintf(stderr, "Matmul x Backpropagation\n");
+    print_mat(dx, 1, in_dim);
+    fprintf(stderr, "Matmul W Backpropagation\n");
+    print_mat(dw, out_dim, in_dim);
+    #endif
 }
 
 

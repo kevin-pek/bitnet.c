@@ -14,10 +14,10 @@
 
 #define BATCH_SIZE 32
 #define EPOCHS 10
-#define LR 1e-2f
-#define EPS 1e-5f
+#define LR 1e-5f
+#define EPS 1e-8f
 #define BETA1 0.9f
-#define BETA2 0.99f
+#define BETA2 0.999f
 #define WEIGHT_DECAY 1e-2f
 
 typedef struct {
@@ -433,11 +433,13 @@ int main() {
     batch.size = BATCH_SIZE;
 
     for (int i = 0; i < EPOCHS; i++) {
-        int j = 0;
+        int j = 0, log_freq = 100;
+        float avg_loss = 0.0f;
         while (mnist_get_next_batch(&batch, trainset) == 0) {
-            float loss = training_step(&model, &batch);
-            if (j % 100 == 0) {
-                printf("Epoch: %d, Batch %d, Training Loss: %.4f\n", i, j, loss);
+            avg_loss += training_step(&model, &batch);
+            if (j % log_freq == 0 && j > 0) {
+                printf("Epoch: %d, Batch %d, Average Training Loss: %.4f\n", i, j, avg_loss / (float) log_freq);
+                avg_loss = 0.0f;
             }
             adamw_update(&optim, params, grad_params, i + 1);
             j++;

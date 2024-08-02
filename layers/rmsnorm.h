@@ -16,8 +16,8 @@ static inline float rmsnorm_inv(const float* x, size_t len) {
         ss += x[i] * x[i];
     ss /= len;
     ss = 1.0f / (sqrtf(ss) + RMSNORM_EPS);
-    if (ss > MAX_RMS_INV) ss = MAX_RMS_INV; // clip values for numerical stability
-    if (isnan(ss)) ss = 0.0f;
+    // if (ss > MAX_RMS_INV) ss = MAX_RMS_INV; // clip values for numerical stability
+    // if (isnan(ss)) ss = 0.0f;
     return ss;
 }
 
@@ -70,6 +70,10 @@ void rmsnorm_bkwd(float* dg, float* dx,
             }
         }
     }
+    #ifdef DEBUG
+    fprintf(stderr, "RMSNorm Backpropagation\n");
+    print_mat(dx, 1, dim);
+    #endif
 }
 
 #endif
