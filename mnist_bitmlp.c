@@ -8,15 +8,14 @@
 #include "layers/batchnorm.h"
 #include "layers/bitlinear.h"
 #include "layers/mlp.h"
-#include "utils/logging.h"
 #include "utils/loss.h"
 #include "utils/mnist.h"
 #include "utils/optim.h"
 
 #define BATCH_SIZE 32
-#define EPOCHS 1
-#define LR 1e-3f
-#define EPS 1e-8f
+#define EPOCHS 10
+#define LR 1e-2f
+#define EPS 1e-5f
 #define BETA1 0.9f
 #define BETA2 0.99f
 #define WEIGHT_DECAY 1e-2f
@@ -82,9 +81,7 @@ void zero_grad(bitmlp_config_t* model, size_t b) {
     memset(model->mem->lin1.dy_rms, 0, sizeof(float) * model->d);
     memset(model->mem->dx_gelu, 0, sizeof(float) * model->h1);
     memset(model->mem->dy_gelu, 0, sizeof(float) * model->h1);
-    print_mat(model->mem->dy, 1, model->h2);
     memset(model->mem->lin2.dy_rms, 0, sizeof(float) * model->h1);
-    print_mat(model->mem->lin2.dy_rms, 1, model->h2);
     memset(model->mem->dy, 0, sizeof(float) * model->h2);
     memset(model->mem_lin3_dy_gelu, 0, sizeof(float) * model->h2);
     memset(model->mem_lin3->dy_rms, 0, sizeof(float) * model->h2);
@@ -93,7 +90,7 @@ void zero_grad(bitmlp_config_t* model, size_t b) {
 
 
 // Single training step for a batch of inputs for the model.
-void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
+float training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
     bitmlp_mem_t* mem = model->mem;
     bitmlp_grad_t* grads = model->grads;
     bitmlp_t* params = model->params;
@@ -128,7 +125,7 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
         model->h2,
         batch->size
     );
-    gelu_fwd(model->mem_lin3->x, mem->lin2.y, model->h1, batch->size);
+    gelu_fwd(model->mem_lin3->x, mem->lin2.y, model->h2, batch->size);
     bitlinear_fwd(
         model->mem_lin3->y,
         model->mem_lin3->y_rms,
@@ -146,7 +143,6 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
 
     // loss is only used for logging, we only need the logits for backpropagation
     float loss = cross_entropy_loss(model->mem_lin3->y, batch->labels, model->o, batch->size);
-    printf("Training loss: %.4f\n", loss);
 
     zero_grad(model, batch->size);
 
@@ -193,6 +189,8 @@ void training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
         model->h2,
         batch->size
     );
+
+    return loss;
 }
 
 
@@ -230,7 +228,7 @@ void validation_step(bitmlp_config_t* model, mnist_batch_t* batch, classifier_me
         model->h2,
         batch->size
     );
-    gelu_fwd(model->mem_lin3->x, mem->lin2.y, model->h1, batch->size);
+    gelu_fwd(model->mem_lin3->x, mem->lin2.y, model->h2, batch->size);
     bitlinear_fwd(
         model->mem_lin3->y,
         model->mem_lin3->y_rms,
@@ -392,7 +390,7 @@ int main() {
     mem.dy_gelu = mem_ptr;
     mem_ptr += model.h1;
 
-    mem.lin1.dy_rms = mem_ptr;
+    mem.lin2.dy_rms = mem_ptr;
     mem_ptr += model.h1;
     mem.lin2.x = mem_ptr;
     mem_ptr += batch.size * model.h1;
@@ -419,8 +417,8 @@ int main() {
     model.probs = mem_ptr; // batch_size * model.o elements
 
     // Initialize training parameters
-    mlp_init(&mlp, &mem, model.d, model.h1, model.h2);
-    bitlinear_init(&lin3_params, &lin3_mem, model.h2, model.o);
+    mlp_init(model.params, model.mem, model.d, model.h1, model.h2);
+    bitlinear_init(model.params_lin3, model.mem_lin3, model.h2, model.o);
 
     adamw_t optim;
     if (adamw_alloc(&optim, n_params) != 0) { exit_code = 10; goto cleanup; }
@@ -428,32 +426,31 @@ int main() {
 
     classifier_metrics_t metrics = {0};
     // Get zero shot accuracy for initial weight parameters
-    // while (mnist_get_next_batch(&batch, testset) == 0)
-    //     validation_step(&model, &batch, &metrics);
-    // printf("Zero-shot Accuracy: %.4f (%d / %d)\n", (float) metrics.correct / (float) (metrics.wrong + metrics.correct), metrics.correct, metrics.correct + metrics.wrong);
-    // mnist_reset_dataset(testset);
-    // batch.size = BATCH_SIZE;
+    while (mnist_get_next_batch(&batch, testset) == 0)
+        validation_step(&model, &batch, &metrics);
+    printf("Zero-shot Test Accuracy: %.4f (%d / %d)\n", (float) metrics.correct / (float) (metrics.wrong + metrics.correct), metrics.correct, metrics.correct + metrics.wrong);
+    mnist_reset_dataset(testset);
+    batch.size = BATCH_SIZE;
 
     for (int i = 0; i < EPOCHS; i++) {
         int j = 0;
         while (mnist_get_next_batch(&batch, trainset) == 0) {
-            printf("Epoch: %d, Batch %d, ", i, j++);
-            training_step(&model, &batch);
+            float loss = training_step(&model, &batch);
+            if (j % 100 == 0) {
+                printf("Epoch: %d, Batch %d, Training Loss: %.4f\n", i, j, loss);
+            }
             adamw_update(&optim, params, grad_params, i + 1);
+            j++;
         }
         mnist_reset_dataset(trainset);
         batch.size = BATCH_SIZE; // reset batch size in case last batch set it lower
     }
 
-    print_mat(model.params->lin1.g, model.d, model.h1);
-    print_mat(model.params->lin2.g, model.h1, model.h2);
-    print_mat(model.mem_lin3->w, model.h2, model.o);
-
     metrics.wrong = 0;
     metrics.correct = 0;
     while (mnist_get_next_batch(&batch, testset) == 0)
         validation_step(&model, &batch, &metrics);
-    printf("Validation Accuracy: %.4f (%d / %d)\n", (float) metrics.correct / (float) (metrics.wrong + metrics.correct), metrics.correct, metrics.correct + metrics.wrong);
+    printf("Test Accuracy: %.4f (%d / %d)\n", (float) metrics.correct / (float) (metrics.wrong + metrics.correct), metrics.correct, metrics.correct + metrics.wrong);
 
     save_weights(&model, "mnist_bitmlp.bin");
 

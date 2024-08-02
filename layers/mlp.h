@@ -40,16 +40,16 @@ void mlp_init(bitmlp_t* mlp, bitmlp_mem_t* mem, size_t in_dim, size_t hidden_dim
 /**
  * @brief MLP layer consisting of 2 BitLinear layers. Based on FFN layer from the BitNet paper.
  * 
- * @param y    output array
- * @param gelu intermediate result of first bitlinear layer, input to GELU
- * @param rms1 store intermediate results of rmsnorm in first bitlinear
- * @param rms2 store intermediate results of rmsnorm in second bitlinear
- * @param x2   output of GELU, input to second bitlinear layer
- * @param x1   input matrix
- * @param w1   weight matrix of first bitlinear layer
- * @param w2   weight matrix of second bitlinear layer
- * @param g1   scaling factors for rmsnorm of first bitlinear layer
- * @param g2   scaling factors for rmsnorm of second bitlinear layer
+ * @param y      output array
+ * @param x_gelu intermediate result of first bitlinear layer, input to GELU
+ * @param rms1   store intermediate results of rmsnorm in first bitlinear
+ * @param rms2   store intermediate results of rmsnorm in second bitlinear
+ * @param x2     output of GELU, input to second bitlinear layer
+ * @param x1     input matrix
+ * @param w1     weight matrix of first bitlinear layer
+ * @param w2     weight matrix of second bitlinear layer
+ * @param g1     scaling factors for rmsnorm of first bitlinear layer
+ * @param g2     scaling factors for rmsnorm of second bitlinear layer
  * @param wq1
  * @param yq1
  * @param xq1
@@ -61,12 +61,12 @@ void mlp_init(bitmlp_t* mlp, bitmlp_mem_t* mem, size_t in_dim, size_t hidden_dim
  * @param o    output dimension
  * @param b    batch size
  */
-void mlp_fwd(float* y, float* gelu, float* rms1, float* rms2, float* x2,
+void mlp_fwd(float* y, float* x_gelu, float* rms1, float* rms2, float* x2,
              const float* x1, const float* w1, const float* w2, const float* g1, const float* g2,
              uint8_t* wq1, int8_t* yq1, int8_t* xq1, uint8_t* wq2, int8_t* yq2, int8_t* xq2,
              size_t d, size_t h, size_t o, size_t b) {
-    bitlinear_fwd(gelu, rms1, x1, w1, g1, wq1, yq1, xq1, d, h, b);
-    gelu_fwd(x2, gelu, h, b);
+    bitlinear_fwd(x_gelu, rms1, x1, w1, g1, wq1, yq1, xq1, d, h, b);
+    gelu_fwd(x2, x_gelu, h, b);
     bitlinear_fwd(y, rms2, x2, w2, g2, wq2, yq2, xq2, h, o, b);
 }
 
