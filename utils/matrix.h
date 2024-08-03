@@ -6,6 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #include "logging.h"
 
 #define PI 3.1415927f // max precision of π for 32 bit floating point numbers
@@ -68,6 +71,7 @@ void matmul_fwd(float* y, const float* x, const float* w, size_t n, size_t m, si
  */
 void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
                    size_t n, size_t m, size_t b) {
+    #pragma omp parallel for collapse(2)
     for (size_t i = 0; i < n; i++) {
         for (size_t j = 0; j < b; j++) {
             const int8_t* xq_ptr = xq + j; // pointer to first row at our current column
@@ -110,6 +114,7 @@ void bitmatmul_fwd(int8_t* yq, const int8_t* xq, const uint8_t* wq,
 void matmul_bkwd(float* dw, float* dx,
                  const float* dy, const float* w, const float* x,
                  size_t out_dim, size_t in_dim, size_t batch_size) {
+    #pragma omp parallel for
     for (size_t b = 0; b < batch_size; b++) {
         const float* x_b = x + b * in_dim;
         for (size_t j = 0; j < in_dim; j++) {
@@ -119,12 +124,6 @@ void matmul_bkwd(float* dw, float* dx,
             }
         }
     }
-    #ifdef DEBUG
-    fprintf(stderr, "Matmul x Backpropagation\n");
-    print_mat(dx, 1, in_dim);
-    fprintf(stderr, "Matmul W Backpropagation\n");
-    print_mat(dw, out_dim, in_dim);
-    #endif
 }
 
 

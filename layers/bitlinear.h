@@ -6,7 +6,6 @@
 #include <stdint.h>
 #include <string.h>
 #include "activation.h"
-#include "batchnorm.h"
 #include "rmsnorm.h"
 #include "../utils/matrix.h"
 
@@ -208,12 +207,7 @@ void bitlinear_bkwd(float* dx, float* dw, float* dg, float* dy_rms,
                     const float* dy, const float* x, const float* w, const float* g, const float* y_rms,
                     size_t in_dim, size_t out_dim, size_t batch_size) {
     matmul_bkwd(dw, dy_rms, dy, w, y_rms, out_dim, in_dim, batch_size);
-    batchnorm(dw, in_dim * out_dim, batch_size);
-    batchnorm(dy_rms, in_dim, batch_size);
-
     rmsnorm_bkwd(dg, dx, dy_rms, x, g, in_dim, batch_size);
-    batchnorm(dg, in_dim, batch_size);
-    batchnorm(dx, in_dim, batch_size);
 }
 
 

@@ -76,11 +76,11 @@ void adamw_init(adamw_t* optim, float lr, float beta1, float beta2, float eps, f
  */
 void adamw_update(adamw_t* optim, float* params, float* grads, int t) {
     for (int i = 0; i < optim->n_params; i++) {
-        optim->m[i] = optim->beta1 * optim->m[i] + (1 - optim->beta1) * grads[i];
-        optim->v[i] = optim->beta2 * optim->v[i] + (1 - optim->beta2) * grads[i] * grads[i];
-        float m_hat = optim->m[i] / (1 - powf(optim->beta1, (float) t)); // bias-corrected estimates using epoch, starting from 1
-        float v_hat = optim->v[i] / (1 - powf(optim->beta2, (float) t));
-        params[i] -= optim->lr * ((m_hat / (sqrtf(v_hat) + optim->eps)) - optim->weight_decay * params[i]);
+        optim->m[i] = optim->beta1 * optim->m[i] + (1.0f - optim->beta1) * grads[i];
+        optim->v[i] = optim->beta2 * optim->v[i] + (1.0f - optim->beta2) * grads[i] * grads[i];
+        float m_hat = optim->m[i] / (1.0f - powf(optim->beta1, (float) t)); // bias-corrected estimates using epoch, starting from 1
+        float v_hat = optim->v[i] / (1.0f - powf(optim->beta2, (float) t));
+        params[i] -= optim->lr * ((m_hat / (sqrtf(v_hat) + optim->eps)) + optim->weight_decay * params[i]);
     }
 }
 

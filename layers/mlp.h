@@ -2,7 +2,6 @@
 #define FFN_H
 
 #include "activation.h"
-#include "batchnorm.h"
 #include "bitlinear.h"
 #include <stdint.h>
 #include <string.h>
@@ -93,8 +92,6 @@ void mlp_bkwd(float* dx, float* dw1, float* dw2, float* dg1, float* dy_rms1, flo
               size_t d, size_t h, size_t o, size_t b) {
     bitlinear_bkwd(dy_gelu, dw2, dg2, dy_rms2, dy2, x2, w2, g2, rms2, h, o, b);
     gelu_bkwd(dx_gelu, dy_gelu, y1, h, b);
-    batchnorm(dx_gelu, h, b);
-
     bitlinear_bkwd(dx, dw1, dg1, dy_rms1, dx_gelu, x1, w1, g1, rms1, d, h, b);
 }
 

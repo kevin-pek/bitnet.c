@@ -39,7 +39,7 @@ float cross_entropy_loss(const float* logits, const uint32_t* targets, size_t n_
         float lse = log_sum_exp(logits_b, n_labels);
         loss -= logits_b[targets[b]] - lse;
     }
-    return loss / (batch_size * n_labels);
+    return loss / batch_size;
 }
 
 #endif

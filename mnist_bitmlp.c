@@ -5,20 +5,23 @@
 #include <string.h>
 #include <time.h>
 #include "layers/activation.h"
-#include "layers/batchnorm.h"
 #include "layers/bitlinear.h"
 #include "layers/mlp.h"
+#ifdef DEBUG
+#include "utils/logging.h"
+#endif
 #include "utils/loss.h"
 #include "utils/mnist.h"
 #include "utils/optim.h"
 
-#define BATCH_SIZE 32
-#define EPOCHS 10
-#define LR 1e-5f
+#define BATCH_SIZE 1
+#define EPOCHS 5
+#define LR 1e-2f
 #define EPS 1e-8f
 #define BETA1 0.9f
 #define BETA2 0.999f
 #define WEIGHT_DECAY 1e-2f
+#define LOG_FREQ 10000
 
 typedef struct {
     bitmlp_mem_t* mem;
@@ -95,11 +98,11 @@ float training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
     bitmlp_grad_t* grads = model->grads;
     bitmlp_t* params = model->params;
 
-    // cast uint8 inputs to float to work with our MLP implementation
+    // cast uint8 inputs to float in the range [-1, 1] to work with our MLP implementation
     for (size_t i = 0; i < batch->size; i++) {
         for (size_t j = 0; j < model->d; j++) {
             size_t idx = i * model->d + j;
-            mem->lin1.x[idx] = (float) batch->images[i].pixels[j];
+            mem->lin1.x[idx] = ((float) batch->images[i].pixels[j] / 255.0f) * 2.0f - 1.0f;
         }
     }
 
@@ -147,7 +150,6 @@ float training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
     zero_grad(model, batch->size);
 
     softmax_bkwd(model->dy_lin3, model->probs, batch->labels, model->o, batch->size);
-    batchnorm(model->dy_lin3, model->o, batch->size);
     bitlinear_bkwd(
         model->mem_lin3_dy_gelu,
         model->grads_lin3->dw,
@@ -163,7 +165,6 @@ float training_step(bitmlp_config_t* model, mnist_batch_t* batch) {
         batch->size
     );
     gelu_bkwd(model->mem->dy, model->mem_lin3_dy_gelu, mem->lin2.y, model->h2, batch->size);
-    batchnorm(model->mem->dy, model->h2, batch->size);
     mlp_bkwd(
         mem->dx,
         grads->lin1.dw,
@@ -198,11 +199,11 @@ void validation_step(bitmlp_config_t* model, mnist_batch_t* batch, classifier_me
     bitmlp_mem_t* mem = model->mem;
     bitmlp_t* params = model->params;
 
-    // cast uint8 inputs to float to work with our MLP implementation
+    // cast uint8 inputs to float in the range [-1, 1] to work with our MLP implementation
     for (size_t i = 0; i < batch->size; i++) {
         for (size_t j = 0; j < model->d; j++) {
             size_t idx = i * model->d + j;
-            mem->lin1.x[idx] = (float) batch->images[i].pixels[j];
+            mem->lin1.x[idx] = ((float) batch->images[i].pixels[j] / 255.0f) * 2.0f - 1.0f;
         }
     }
 
@@ -432,21 +433,43 @@ int main() {
     mnist_reset_dataset(testset);
     batch.size = BATCH_SIZE;
 
+    int j = 0;
     for (int i = 0; i < EPOCHS; i++) {
-        int j = 0, log_freq = 100;
         float avg_loss = 0.0f;
         while (mnist_get_next_batch(&batch, trainset) == 0) {
             avg_loss += training_step(&model, &batch);
-            if (j % log_freq == 0 && j > 0) {
-                printf("Epoch: %d, Batch %d, Average Training Loss: %.4f\n", i, j, avg_loss / (float) log_freq);
+            if (j % LOG_FREQ == 0 && j > 0) {
+                printf("Epoch: %d, Batch %d, Average Training Loss: %.4f\n", i, (int) (j % trainset->size), avg_loss / (float) LOG_FREQ);
                 avg_loss = 0.0f;
+                #ifdef DEBUG
+                weight_quant(model.params_lin3->wq, model.mem_lin3->w, model.h2 * model.o);
+                fprintf(stderr, "[\n");
+                for (size_t n = 0; n < model.o; n++) {
+                    fprintf(stderr, "\t[");
+                    for (size_t m = 0; m < (model.h2 + 7) / 8; m++) {
+                        printbin8(model.params_lin3->wq[n * (model.h2 + 7) / 8 + m]);
+                    }
+                    fprintf(stderr, "]\n");
+                }
+                fprintf(stderr, "]\n");
+                print_mat(model.mem_lin3->w, model.o, model.h2);
+                #endif
             }
-            adamw_update(&optim, params, grad_params, i + 1);
-            j++;
+            adamw_update(&optim, params, grad_params, (j++ / batch.size) + 1);
         }
+        #ifdef DEBUG
+        fprintf(stderr, "Time step for update: %d\n", (j / LOG_FREQ) + 1);
+        #endif
         mnist_reset_dataset(trainset);
         batch.size = BATCH_SIZE; // reset batch size in case last batch set it lower
     }
+
+    metrics.wrong = 0;
+    metrics.correct = 0;
+    while (mnist_get_next_batch(&batch, trainset) == 0)
+        validation_step(&model, &batch, &metrics);
+    printf("Train Accuracy: %.4f (%d / %d)\n", (float) metrics.correct / (float) (metrics.wrong + metrics.correct), metrics.correct, metrics.correct + metrics.wrong);
+    batch.size = BATCH_SIZE;
 
     metrics.wrong = 0;
     metrics.correct = 0;

@@ -70,10 +70,6 @@ void rmsnorm_bkwd(float* dg, float* dx,
             }
         }
     }
-    #ifdef DEBUG
-    fprintf(stderr, "RMSNorm Backpropagation\n");
-    print_mat(dx, 1, dim);
-    #endif
 }
 
 #endif
